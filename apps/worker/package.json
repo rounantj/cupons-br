@@ -1,0 +1,14 @@
+{
+  "name": "@cupons/worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": { "start": "node dist/main.js" },
+  "dependencies": {
+    "@cupons/ai": "workspace:*",
+    "@cupons/contracts": "workspace:*",
+    "@cupons/core": "workspace:*",
+    "@cupons/db": "workspace:*",
+    "@cupons/sources": "workspace:*"
+  }
+}

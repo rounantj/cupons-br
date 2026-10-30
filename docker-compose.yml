@@ -1,0 +1,44 @@
+# Ambiente local (custo zero): Postgres + pgvector, migração, API e worker.
+# Banco próprio já existente? Defina DATABASE_URL no .env e suba só api/worker: docker compose up api worker
+name: cupons-br
+
+x-app: &app
+  build: { context: ., dockerfile: infra/docker/Dockerfile }
+  env_file: [{ path: .env, required: false }]
+  environment:
+    DATABASE_URL: ${DATABASE_URL:-postgresql://cupons:cupons@postgres:5432/cupons}
+    DATABASE_SSL: ${DATABASE_SSL:-false}
+    DB_SCHEMA: ${DB_SCHEMA:-cupons}
+    # Vêm do .env ou do shell (shell vazio NÃO sobrescreve: use unset)
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+    LLM_TRACE: ${LLM_TRACE:-0}
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: { POSTGRES_USER: cupons, POSTGRES_PASSWORD: cupons, POSTGRES_DB: cupons }
+    ports: ["5545:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U cupons"], interval: 3s, retries: 30 }
+
+  migrate:
+    <<: *app
+    command: ["node", "packages/db/dist/migrate.js"]
+    restart: "no"
+    depends_on: { postgres: { condition: service_healthy } }
+
+  api:
+    <<: *app
+    command: ["node", "apps/api/dist/main.js"]
+    ports: ["3000:3000"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+
+  worker:
+    <<: *app
+    command: ["node", "apps/worker/dist/main.js"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+
+volumes:
+  pgdata:

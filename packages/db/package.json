@@ -1,0 +1,14 @@
+{
+  "name": "@cupons/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "pg": "8.23.1",
+    "pg-boss": "10.4.2"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  }
+}

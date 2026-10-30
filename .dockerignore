@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+apps/extension/src
+apps/extension/public
+.git
+.env
+*.zip
