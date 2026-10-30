@@ -1,0 +1,41 @@
+#cloud-config
+# Sobe API + worker + Caddy (HTTPS automático) a partir das imagens do GHCR.
+write_files:
+  - path: /opt/cupons/.env
+    permissions: "0600"
+    content: |
+      ${indent(6, env_file)}
+  - path: /opt/cupons/docker-compose.yml
+    content: |
+      services:
+        migrate:
+          image: ghcr.io/${github_owner}/cupons-br:${image_tag}
+          env_file: .env
+          command: ["node", "packages/db/dist/migrate.js"]
+          restart: "no"
+        api:
+          image: ghcr.io/${github_owner}/cupons-br:${image_tag}
+          env_file: .env
+          command: ["node", "apps/api/dist/main.js"]
+          depends_on: { migrate: { condition: service_completed_successfully } }
+          restart: unless-stopped
+        worker:
+          image: ghcr.io/${github_owner}/cupons-br:${image_tag}
+          env_file: .env
+          command: ["node", "apps/worker/dist/main.js"]
+          depends_on: { migrate: { condition: service_completed_successfully } }
+          restart: unless-stopped
+        caddy:
+          image: caddy:2-alpine
+          ports: ["80:80", "443:443"]
+          volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy:/data"]
+          restart: unless-stopped
+      volumes:
+        caddy:
+runcmd:
+  - fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  - |
+    HOST="${domain}"
+    [ -z "$HOST" ] && HOST="$(curl -s http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address | tr . -).sslip.io"
+    printf '%s {\n  reverse_proxy api:3000\n}\n' "$HOST" > /opt/cupons/Caddyfile
+  - cd /opt/cupons && docker compose up -d

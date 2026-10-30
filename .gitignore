@@ -9,3 +9,6 @@ dist/
 .DS_Store
 coverage/
 store/packages/
+terraform.tfvars
+*.tfstate*
+.terraform/

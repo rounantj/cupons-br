@@ -1,0 +1,5 @@
+# cp terraform.tfvars.example terraform.tfvars  (não versionado)
+ssh_public_key = "ssh-ed25519 AAAA... voce@maquina"
+droplet_size   = "s-1vcpu-1gb"
+domain         = ""
+# do_token e app_env: prefira variáveis de ambiente TF_VAR_do_token e TF_VAR_app_env

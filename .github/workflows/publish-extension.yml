@@ -1,0 +1,57 @@
+# Publica a extensão ao criar uma tag v* (ex.: git tag v0.1.1 && git push --tags).
+# Pré-requisitos: 1º envio MANUAL em cada loja; secrets/variables abaixo cadastrados no repositório.
+name: publish-extension
+on:
+  push: { tags: ["v*"] }
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cupons/extension build
+        env: { VITE_API_URL: "${{ vars.API_URL }}" }
+      - run: cd apps/extension/dist/chrome && zip -qr ../../../../ext-chrome.zip .
+      - run: git archive --format=zip -o source.zip HEAD   # AMO exige o código-fonte de builds empacotados
+
+      - name: Chrome Web Store (API v2)
+        if: ${{ vars.CWS_ITEM_ID != '' }}
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUB: 345c82ed-6462-422a-8b64-d31461b786aa
+          ITEM: ${{ vars.CWS_ITEM_ID }}
+        run: |
+          TOKEN=$(curl -s https://oauth2.googleapis.com/token -d client_id=$CWS_CLIENT_ID -d client_secret=$CWS_CLIENT_SECRET \
+            -d refresh_token=$CWS_REFRESH_TOKEN -d grant_type=refresh_token | jq -r .access_token)
+          curl -sf -H "Authorization: Bearer $TOKEN" -X POST -T ext-chrome.zip \
+            https://chromewebstore.googleapis.com/upload/v2/publishers/$PUB/items/$ITEM:upload
+          curl -sf -H "Authorization: Bearer $TOKEN" -X POST \
+            https://chromewebstore.googleapis.com/v2/publishers/$PUB/items/$ITEM:publish
+
+      - name: Firefox AMO
+        if: ${{ vars.AMO_ENABLED == 'true' }}
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npx -y web-ext@8 lint --source-dir apps/extension/dist/firefox
+          npx -y web-ext@8 sign --source-dir apps/extension/dist/firefox --channel=listed --upload-source-code=source.zip
+
+      - name: Microsoft Edge (API v1.1)
+        if: ${{ vars.EDGE_PRODUCT_ID != '' }}
+        env:
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_PRODUCT_ID: ${{ vars.EDGE_PRODUCT_ID }}
+        run: |
+          API=https://api.addons.microsoftedge.microsoft.com/v1/products/$EDGE_PRODUCT_ID
+          curl -sf -H "Authorization: ApiKey $EDGE_API_KEY" -H "X-ClientID: $EDGE_CLIENT_ID" \
+            -H "Content-Type: application/zip" -X POST -T ext-chrome.zip $API/submissions/draft/package
+          sleep 60
+          curl -sf -H "Authorization: ApiKey $EDGE_API_KEY" -H "X-ClientID: $EDGE_CLIENT_ID" \
+            -X POST -d '{"notes":"Atualização automática"}' $API/submissions
