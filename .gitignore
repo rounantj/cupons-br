@@ -8,3 +8,4 @@ dist/
 *.xpi
 .DS_Store
 coverage/
+store/packages/

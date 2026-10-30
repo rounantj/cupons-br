@@ -63,7 +63,12 @@ async function main() {
   });
 
   await queue.schedule(QUEUES.maintenance, "*/15 * * * *");
-  await queue.work(QUEUES.maintenance, async () => log(`cache: ${await cacheSweep()} entradas expiradas removidas`));
+  await queue.work(QUEUES.maintenance, async () => {
+    log(`cache: ${await cacheSweep()} entradas expiradas removidas`);
+    // retenção prometida na política de privacidade: contexto das buscas (URL da página) por 90 dias
+    const old = await query("DELETE FROM searches WHERE created_at < now() - interval '90 days' RETURNING 1");
+    if (old.length) log(`retenção: ${old.length} buscas com mais de 90 dias removidas`);
+  });
   log(`worker pronto (análise com ${concurrency} consumidores)`);
 }
 
