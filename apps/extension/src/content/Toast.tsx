@@ -112,3 +112,14 @@ export function Toast({ view, currentUrl, onClose, onHideSite }: Props) {
     </div>
   );
 }
+
+/** Enquanto a primeira busca do produto roda: pílula discreta, sem bloquear a página. */
+export function Searching({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="pill searching" role="status" aria-live="polite">
+      <span className="logo spin">%</span>
+      Procurando cupons…
+      <button className="icon" title="Fechar" aria-label="Fechar" onClick={onClose}>×</button>
+    </div>
+  );
+}

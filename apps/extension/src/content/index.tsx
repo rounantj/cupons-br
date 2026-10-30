@@ -7,10 +7,11 @@ import type { SearchView } from "@cupons/contracts";
 import type { Reply, Request } from "../messages";
 import { detectProduct, isProductPage } from "./detect";
 import { CSS } from "./styles";
-import { Toast } from "./Toast";
+import { Searching, Toast } from "./Toast";
+import type { ReactNode } from "react";
 
 const POLL_MS = 2500;
-const MAX_WAIT_MS = 120_000;
+const MAX_WAIT_MS = 180_000;
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 let currentRun = 0;
@@ -29,7 +30,7 @@ function unmount() {
   host = null;
 }
 
-function mount(view: SearchView) {
+function mount(node: ReactNode) {
   unmount();
   host = document.createElement("cupons-br-toast");
   const shadow = host.attachShadow({ mode: "closed" });
@@ -40,7 +41,11 @@ function mount(view: SearchView) {
   shadow.append(style, container);
   document.documentElement.append(host);
   root = createRoot(container);
-  root.render(
+  root.render(node);
+}
+
+function showResult(view: SearchView) {
+  mount(
     <Toast view={view} currentUrl={location.href} onClose={() => {
       sessionStorage.setItem(`cupons-br:closed:${view.product?.id}`, "1");
       unmount();
@@ -69,14 +74,20 @@ async function run() {
 
   let reply = await send({ type: "search", page });
   const started = Date.now();
+  // Busca nova leva ~30-60 s: indicador discreto para não parecer travado (fecha = cancela só a exibição)
+  if (reply.ok && !["done", "failed"].includes(reply.view.status)) {
+    mount(<Searching onClose={() => { currentRun++; unmount(); }} />);
+  }
   while (reply.ok && !["done", "failed"].includes(reply.view.status) && Date.now() - started < MAX_WAIT_MS) {
     await new Promise((r) => setTimeout(r, POLL_MS));
     if (run !== currentRun) return; // usuário trocou de produto
     reply = await send({ type: "poll", id: reply.view.id });
   }
-  if (!reply.ok || run !== currentRun || reply.view.status !== "done") return;
+  if (run !== currentRun) return;
+  unmount();
+  if (!reply.ok || reply.view.status !== "done") return;
   if (sessionStorage.getItem(`cupons-br:closed:${reply.view.product?.id}`)) return;
-  if (worthShowing(reply.view)) mount(reply.view);
+  if (worthShowing(reply.view)) showResult(reply.view);
 }
 
 // Primeira carga (aguarda o JSON-LD/título da loja) + mudanças de URL sem recarga.

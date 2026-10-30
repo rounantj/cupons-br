@@ -17,7 +17,7 @@ export const CSS = `
   box-shadow: var(--shadow); overflow: hidden; animation: in .35s cubic-bezier(.2,.8,.2,1);
 }
 @keyframes in { from { opacity: 0; transform: translateY(-8px) scale(.98); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .card, .pill { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .card, .pill, .pill .spin { animation: none; } }
 .head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px 14px; }
 .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 800; font-size: 14px; flex: none; }
 .title { flex: 1; min-width: 0; }
@@ -56,4 +56,7 @@ export const CSS = `
 .pill { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 8px; border-radius: 999px; background: var(--bg);
         border: 1px solid var(--line); box-shadow: var(--shadow); font-weight: 700; animation: in .3s ease; }
 .pill .logo { width: 24px; height: 24px; font-size: 12px; border-radius: 999px; }
+.pill.searching { cursor: default; padding-right: 4px; color: var(--muted); }
+.pill .spin { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; transform: scale(.9); } }
 `;
