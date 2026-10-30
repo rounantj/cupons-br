@@ -1,0 +1,10 @@
+{
+  "version": { "license": "all-rights-reserved" },
+  "categories": { "firefox": ["shopping"] },
+  "summary": { "pt-BR": "Mostra cupons ativos e o melhor preço do produto que você está vendo na Amazon, Mercado Livre, Shopee e outras lojas.", "en-US": "Shows active coupons and the best price for the product you are viewing on Brazilian stores (Amazon, Mercado Livre, Shopee and more)." },
+  "description": { "pt-BR": "Abra um produto na Amazon, Mercado Livre, Shopee, Magazine Luiza, KaBuM, Casas Bahia ou Americanas e o Cupons BR mostra, num cantinho discreto da tela, cupons quentes com o desconto REAL já calculado (teto e compra mínima aplicados), um botão para copiar o código e o preço do mesmo produto em outras lojas. Só aparece quando há vantagem real, fecha com um clique e pode ser ocultado em qualquer site. Alguns links são de afiliado: podemos ganhar comissão, sem custo extra para você. Nada é aberto sem o seu clique." },
+  "homepage": { "pt-BR": "https://github.com/rounantj/cupons-br" },
+  "support_url": { "pt-BR": "https://github.com/rounantj/cupons-br/issues" },
+  "is_experimental": false,
+  "requires_payment": false
+}
