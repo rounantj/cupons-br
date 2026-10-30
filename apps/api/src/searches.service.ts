@@ -12,6 +12,8 @@ const COUPON_TTL_MINUTES = Number(process.env.COUPON_TTL_MINUTES ?? 60);
 const CANDIDATE_DISTANCE = Number(process.env.CANDIDATE_DISTANCE ?? 0.3);
 /** Só cupons vistos recentemente: a ideia é oferecer coisas quentes. */
 const HOT_DAYS = Number(process.env.COUPON_HOT_DAYS ?? 14);
+/** Só cupons com evidência de valer para o produto (cupom de campanha "talvez sirva" frustra o usuário no checkout). */
+const MIN_CONFIDENCE = 0.6;
 
 /** "Apple iPhone 17 256GB | Amazon.com.br" -> "Apple iPhone 17 256GB" */
 function cleanTitle(title: string): string {
@@ -144,8 +146,8 @@ export class SearchesService {
               (SELECT array_agg(DISTINCT cs.creator) FROM (SELECT creator FROM coupon_sightings
                 WHERE coupon_id = c.id AND creator IS NOT NULL ORDER BY seen_at DESC LIMIT 3) cs) AS seen_at
        FROM product_coupons pc JOIN coupons c ON c.id = pc.coupon_id
-       WHERE pc.product_id = $1 AND pc.applies AND c.last_seen_at > now() - make_interval(days => $2)`,
-      [s.product_id, HOT_DAYS]);
+       WHERE pc.product_id = $1 AND pc.applies AND pc.confidence >= $3 AND c.last_seen_at > now() - make_interval(days => $2)`,
+      [s.product_id, HOT_DAYS, MIN_CONFIDENCE]);
 
     const cheapest = new Map<string, AffiliateLinkView>();
     for (const l of affiliateLinks) {

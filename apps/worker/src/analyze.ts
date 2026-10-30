@@ -7,6 +7,9 @@
  *  - restrição citada pela IA precisa existir no texto; categoria no nome do código (CASA3010) bloqueia
  *  - cupom de outro modelo (link "iphone-17-pro" na busca "iPhone 17") não vale
  *  - preço só em R$, link nacional, trecho precisa citar o produto e o modelo certo
+ *  - cupom de influenciador sem link de produto (vitrine/campanha) vale só em "produtos selecionados":
+ *    no teste real, COMPRAS e AQUITEMTECH (ML, "15% até R$500") não aplicaram num iPhone
+ *  - sinal de comentário só quando há comentários (Telegram não tem; a IA inventava "funcionou")
  */
 import { CREATOR_SCHEMA, CREATOR_SYSTEM, CreatorItem, FIT_SCHEMA, FIT_SYSTEM, chatJson } from "@cupons/ai";
 import {
@@ -53,7 +56,8 @@ async function categoryFits(productName: string, category: string): Promise<bool
 }
 
 function adjust(c: CreatorContent, it: CreatorItem, code: string | null, confidence: number, reason: string): [number, string] {
-  const signal = commentSignal(c.comments, code) ?? (it.comment_signal !== "none" ? it.comment_signal : null);
+  const signal = !c.comments.length ? null
+    : commentSignal(c.comments, code) ?? (it.comment_signal !== "none" ? it.comment_signal : null);
   let delta = 0;
   if (signal && SIGNAL[signal]) {
     delta += SIGNAL[signal][0];
@@ -100,6 +104,21 @@ async function priceItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pro
 
 interface CouponDecision { applies: boolean; confidence: number; reason: string }
 
+const SITEWIDE = /todo (o )?site|site todo|site inteiro|qualquer produto/i;
+
+/** Sem restrição explícita: o link do post diz para que o cupom foi divulgado. */
+async function scope(p: ProductCtx, c: CreatorContent, url: string | null, near: string): Promise<CouponDecision> {
+  const ref = url ? productOf(await resolveUrl(url)) : null;
+  if (ref) {
+    return productMismatch(p.name, `${c.title}\n${c.text}`)
+      ? { applies: true, confidence: 0.25, reason: "divulgado junto com outro produto — confira no carrinho" }
+      : { applies: true, confidence: 0.75, reason: "divulgado junto com este produto" };
+  }
+  return SITEWIDE.test(near)
+    ? { applies: true, confidence: 0.45, reason: "anunciado como válido no site todo — confira no carrinho" }
+    : { applies: true, confidence: 0.3, reason: "cupom de campanha: vale em produtos selecionados — confira no carrinho" };
+}
+
 async function couponItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Promise<"saved" | "skipped"> {
   const code = (it.code ?? "").trim();
   const text = sourceText(c);
@@ -125,14 +144,9 @@ async function couponItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pr
   else if (it.freight_only && /frete/i.test(`${near}`)) d = { applies: false, confidence: 0, reason: "desconto só no frete" };
   else if (restriction === "?") d = { applies: false, confidence: 0, reason: "restrição citada não confirmada no texto" };
   else if (restriction && !(await categoryFits(p.name, restriction))) d = { applies: false, confidence: 0, reason: `restrito a: ${restriction}` };
-  else {
-    const selected = SELECTED.test(near);
-    d = restriction
-      ? { applies: true, confidence: selected ? 0.4 : 0.7, reason: `categoria compatível: ${restriction}` }
-      : selected
-        ? { applies: true, confidence: 0.3, reason: "só itens elegíveis/selecionados — confira no carrinho" }
-        : { applies: true, confidence: 0.75, reason: "cupom geral da plataforma" };
-  }
+  else if (restriction) d = { applies: true, confidence: SELECTED.test(near) ? 0.4 : 0.7, reason: `categoria compatível: ${restriction}` };
+  else if (SELECTED.test(near)) d = { applies: true, confidence: 0.3, reason: "só itens elegíveis/selecionados — confira no carrinho" };
+  else d = await scope(p, c, url, near);
   if (d.applies) [d.confidence, d.reason] = adjust(c, it, code, d.confidence, d.reason);
   if (it.conditions) d.reason += ` · condições: ${it.conditions}`;
 
