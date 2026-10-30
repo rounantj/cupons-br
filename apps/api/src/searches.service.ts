@@ -55,9 +55,15 @@ export class SearchesService {
   /** Página que o usuário está vendo -> GTIN -> nome normalizado -> vetor do nome -> produto novo. */
   private async resolveProduct(name: string, origin: ProductRef | null, gtin?: string): Promise<string> {
     if (origin) {
-      const byListing = await one<{ product_id: string }>(
-        "SELECT product_id FROM listings WHERE platform = $1 AND external_id = $2", [origin.platform, origin.externalId]);
-      if (byListing) return byListing.product_id;
+      const byListing = await one<{ product_id: string; name: string }>(
+        `SELECT l.product_id, p.name FROM listings l JOIN products p ON p.id = l.product_id
+         WHERE l.platform = $1 AND l.external_id = $2`, [origin.platform, origin.externalId]);
+      // a página só decide o produto se o nome não contradiz (ex.: página do "17 Pro" ligada ao "17")
+      if (byListing && sameProduct(name, byListing.name)) return byListing.product_id;
+      if (byListing) {
+        this.log.warn(`listing ${origin.platform}/${origin.externalId} estava em "${byListing.name}", página diz "${name}": reassociando`);
+        await query("DELETE FROM listings WHERE platform = $1 AND external_id = $2", [origin.platform, origin.externalId]);
+      }
     }
     if (gtin) {
       const byGtin = await one<{ id: string }>("SELECT id FROM products WHERE gtin = $1", [gtin]);
@@ -147,22 +153,27 @@ export class SearchesService {
       if (l.price && (!cur || !cur.price || l.price < cur.price)) cheapest.set(l.platform, l);
       else if (!cur) cheapest.set(l.platform, l);
     }
+    // Sem preço do produto na plataforma do cupom: estima o % efetivo pelo preço da página/outra loja
+    const pagePrice: number | null = s.page?.price ?? affiliateLinks.find((l) => l.price)?.price ?? null;
     const coupons: CouponView[] = rows.flatMap((r) => {
       const terms = { kind: r.discount_kind, value: r.value, cap: r.cap, min: r.min };
       const listing = cheapest.get(r.platform);
+      const base = listing?.price ?? pagePrice;
       let effective: number | null = null;
-      if (listing?.price && terms.kind) {
-        const fp = finalPrice(listing.price, terms);
-        if (fp.price === null) return []; // não se aplica a este preço (ex.: compra mínima maior)
-        effective = Math.round(((listing.price - fp.price) / listing.price) * 1000) / 10;
-        if (effective < 0.5) return []; // efeito desprezível no produto
+      if (base && terms.kind) {
+        const fp = finalPrice(base, terms);
+        if (fp.price === null && listing?.price) return []; // não se aplica ao preço desta plataforma (ex.: mínimo maior)
+        if (fp.price !== null) effective = Math.round(((base - fp.price) / base) * 1000) / 10;
+        if (effective !== null && effective < 0.5) return []; // efeito desprezível no produto
       }
       return [{
         code: r.code,
         platform: r.platform,
         discountLabel: discountLabel(terms),
         effectivePercent: effective,
+        effectiveIsEstimate: effective !== null && !listing?.price,
         nominalPercent: terms.kind === "percent" ? terms.value : null,
+        samePlatformAsPage: Boolean(originRef && originRef.platform === r.platform),
         conditions: r.conditions,
         confidence: Math.round(r.confidence * 100) / 100,
         lastSeenAt: new Date(r.last_seen_at).toISOString(),
@@ -173,7 +184,8 @@ export class SearchesService {
     // Melhor primeiro: confiança × desconto × "quentura" (decai em ~3 dias)
     const score = (c: CouponView) => c.confidence * (c.effectivePercent ?? c.nominalPercent ?? 3)
       * Math.exp(-(Date.now() - Date.parse(c.lastSeenAt)) / (72 * 3600_000));
-    coupons.sort((a, b) => score(b) - score(a));
+    // Cupons da loja que o usuário está vendo primeiro
+    coupons.sort((a, b) => Number(b.samePlatformAsPage) - Number(a.samePlatformAsPage) || score(b) - score(a));
 
     const sources = await query<any>("SELECT source, status, items, detail FROM source_runs WHERE search_id = $1 ORDER BY source", [searchId]);
     return {

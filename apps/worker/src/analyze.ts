@@ -10,7 +10,7 @@
  */
 import { CREATOR_SCHEMA, CREATOR_SYSTEM, CreatorItem, FIT_SCHEMA, FIT_SYSTEM, chatJson } from "@cupons/ai";
 import {
-  FOREIGN_URL, SELECTED, brlAmounts, cleanStore, codeCategory, commentSignal, isCode, linesNear, modelConflict,
+  FOREIGN_URL, SELECTED, brlAmounts, cleanStore, codeCategory, commentSignal, couponForOtherModel, isCode, linesNear, modelConflict,
   platformOf, productMismatch, productOf, termsNearCode, verifiedRestriction,
 } from "@cupons/core";
 import { cached, one, query } from "@cupons/db";
@@ -119,7 +119,7 @@ async function couponItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pr
 
   let d: CouponDecision;
   const category = codeCategory(code);
-  const otherModel = modelConflict(p.name, `${near} ${url ?? ""}`);
+  const otherModel = couponForOtherModel(p.name, `${near} ${url ?? ""}`);
   if (category) d = { applies: false, confidence: 0, reason: `cupom de outra categoria pelo nome do código (${category})` };
   else if (otherModel) d = { applies: false, confidence: 0, reason: `cupom de outro modelo: ${otherModel}` };
   else if (it.freight_only && /frete/i.test(`${near}`)) d = { applies: false, confidence: 0, reason: "desconto só no frete" };

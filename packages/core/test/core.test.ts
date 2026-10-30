@@ -1,7 +1,7 @@
 /** Regressão: cada caso aqui foi um erro real observado no POC. */
 import { describe, expect, it } from "vitest";
 import {
-  brlAmounts, canonicalKey, codeCategory, credentialsFromEnv, discountLabel, finalPrice, isCode, modelConflict, offCategory,
+  brlAmounts, canonicalKey, codeCategory, couponForOtherModel, credentialsFromEnv, discountLabel, finalPrice, isCode, modelConflict, offCategory,
   ourLink, parseTerms, platformOf, productMismatch, productOf, sameProduct, termsNearCode, verifiedRestriction,
 } from "../src";
 
@@ -72,6 +72,11 @@ describe("produto e modelo", () => {
     expect(sameProduct("Apple iPhone 17 256GB", "iphone 17 de 256 gb da apple")).toBe(true);
     expect(sameProduct("Apple iPhone 17 256GB", "iPhone 17 Pro 256GB")).toBe(false);
     expect(sameProduct("Apple iPhone 17 256GB", "iPhone 17 512GB")).toBe(false);
+  });
+  it("cupom geral vale para modelo com qualificador; cupom de outro modelo não", () => {
+    expect(couponForOtherModel("Apple iPhone 17 Pro 256GB", "🎟 10% OFF em R$149, Limite de R$ 200: AQUITEMTECH")).toBeNull();
+    expect(couponForOtherModel("Apple iPhone 17 Pro 256GB", "iPhone 17 Pro Max por R$ 9.999 com cupom COMPRAS")).toMatch(/max/);
+    expect(couponForOtherModel("Iphone 17", "https://www.kabum.com.br/produto/925352/iphone-17-pro-apple-1tb")).toMatch(/pro/);
   });
   it("chave canônica junta grafias", () => {
     expect(canonicalKey("Play Station 5")).toBe(canonicalKey("playstation 5"));

@@ -39,6 +39,17 @@ export function productMismatch(query: string, context: string): string | null {
   return null;
 }
 
+/**
+ * Cupom de OUTRO modelo? Só vale checar quando o trecho fala do produto (mesma linha/número):
+ * cupom geral ("10% no site todo") não cita produto nenhum e não pode ser rejeitado por "falta Pro".
+ */
+export function couponForOtherModel(query: string, context: string): string | null {
+  // família do produto (sem capacidade: "iPhone 17 Pro Max" fala da família de "iPhone 17 Pro 256GB")
+  const family = normalizeText(query).replace(/\b\d+\s*(gb|tb|mb)\b/g, " ");
+  if (productMismatch(family, context)) return null; // trecho não é sobre este produto: cupom geral
+  return modelConflict(query, context);
+}
+
 /** Dois nomes descrevem o mesmo produto? Mesmos números de modelo/capacidade e nenhuma versão diferente. */
 export function sameProduct(a: string, b: string): boolean {
   return !productMismatch(a, b) && !productMismatch(b, a) && !modelConflict(a, b) && !modelConflict(b, a);

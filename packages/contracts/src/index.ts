@@ -43,7 +43,11 @@ export interface CouponView {
   discountLabel: string | null;
   /** desconto efetivo no preço conhecido do produto naquela plataforma (teto/mínimo aplicados) */
   effectivePercent: number | null;
+  /** effectivePercent calculado sobre o preço de outra loja (falta o preço nesta plataforma) */
+  effectiveIsEstimate: boolean;
   nominalPercent: number | null;
+  /** cupom da mesma loja da página que o usuário está vendo */
+  samePlatformAsPage: boolean;
   conditions: string | null;
   confidence: number;
   /** quando o cupom foi visto pela última vez (cupons "quentes" primeiro) */
