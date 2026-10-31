@@ -13,7 +13,8 @@ o Cupons BR mostra, num cantinho discreto da tela, os cupons que valem para aque
 
 O que você vê:
 • O cupom que a própria loja oferece no anúncio, com um atalho para ativá-lo
-• Cupons recentes avaliados pela comunidade de ofertas, só quando há sinal de que valem para o seu produto
+• Só cupons que funcionaram de verdade: no checkout, com um clique seu, a extensão testa os cupons encontrados
+  e mostra quais valeram para a sua compra
 • O desconto real no seu produto, já com teto e compra mínima aplicados: um cupom de "15% até R$ 500" num produto
   de R$ 8.877 aparece como cerca de 5,6%
 • Botão para copiar o código
