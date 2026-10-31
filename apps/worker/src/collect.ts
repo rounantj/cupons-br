@@ -117,5 +117,5 @@ async function hasUsefulCoupon(productId: string): Promise<boolean> {
     `SELECT 1 FROM product_coupons pc JOIN coupons c ON c.id = pc.coupon_id
      WHERE pc.product_id = $1 AND pc.applies AND pc.confidence >= $2
        AND c.last_seen_at > now() - make_interval(days => $3) LIMIT 1`,
-    [productId, MIN_CONFIDENCE, Number(process.env.COUPON_HOT_DAYS ?? 14)]));
+    [productId, MIN_CONFIDENCE, Number(process.env.COUPON_HOT_DAYS ?? 2)]));
 }

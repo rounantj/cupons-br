@@ -13,7 +13,7 @@ import { CreatorContent, SourceResult } from "./types";
 
 const PELANDO = "https://www.pelando.com.br";
 const PROMOBIT = "https://www.promobit.com.br";
-const HOT_MS = Number(process.env.COUPON_HOT_DAYS ?? 14) * 86400_000;
+const HOT_MS = Number(process.env.COUPON_HOT_DAYS ?? 2) * 86400_000;
 const MAX_DEALS = 6;
 
 const PELANDO_STORES: Partial<Record<Platform, string>> = {
@@ -94,7 +94,17 @@ async function pelandoDeals(productName: string): Promise<{ items: CreatorConten
   return { items, seen: matching.length };
 }
 
-/** Cupons da loja no Pelando (cards com código, escopo e temperatura). */
+/** "há 4 hs", "há 30 min", "há 11 dias" -> data. O Pelando mantém cards antigos na lista de cupons "ativos". */
+export function pelandoAge(text: string, now = Date.now()): Date | null {
+  const m = text.match(/há\s+(\d+)\s*(min|h|hs|hora|horas|dia|dias|sem|semana|semanas|m[eê]s|meses)\b/i);
+  if (!m) return null;
+  const unit = m[2].toLowerCase();
+  const ms = unit.startsWith("min") ? 60_000 : unit.startsWith("h") ? 3600_000 : unit.startsWith("d") ? 86400_000
+    : unit.startsWith("sem") ? 7 * 86400_000 : 30 * 86400_000;
+  return new Date(now - Number(m[1]) * ms);
+}
+
+/** Cupons da loja no Pelando (cards com código, escopo, temperatura e "Verificado hoje"). */
 async function pelandoStore(platform: Platform): Promise<CreatorContent[]> {
   const store = PELANDO_STORES[platform];
   if (!store) return [];
@@ -106,6 +116,10 @@ async function pelandoStore(platform: Platform): Promise<CreatorContent[]> {
     const desc = textOf(card.match(/card__description"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? "");
     const temp = Number(unescape(card).match(/"initialTemperature":\[0,(-?[\d.]+)\]/)?.[1] ?? 0);
     const id = card.match(/data-deal-id="([^"]+)"/)?.[1] ?? code;
+    const published = pelandoAge(textOf(card.match(/card__author"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? ""));
+    if (!published || published.getTime() < Date.now() - HOT_MS) return [];
+    // ML/Amazon trocam cupons em horas ("limite de 1.000 cupons"): só o selo do dia garante que ainda funciona
+    const verified = /Verificado hoje/i.test(card.match(/card__footer"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? "");
     return [{
       source: "pelando" as const,
       sourceUrl: `${PELANDO}/cupons-de-descontos/${store}#${id}`,
@@ -114,9 +128,10 @@ async function pelandoStore(platform: Platform): Promise<CreatorContent[]> {
       creatorId: `pl:${id}`,
       text: `${title} · ${desc} · Cupom ${platform}: ${unescape(code)}`, // uma linha: regras ficam "perto do código"
       comments: [],
-      publishedAt: new Date().toISOString(), // a lista não traz data exata; só cupons ativos aparecem nela
+      publishedAt: published.toISOString(),
       live: false,
       votes: temp,
+      verified,
     }];
   });
 }

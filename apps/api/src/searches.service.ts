@@ -11,7 +11,7 @@ const COUPON_TTL_MINUTES = Number(process.env.COUPON_TTL_MINUTES ?? 60);
 /** Distância de cosseno máxima para um produto ser CANDIDATO (o código confirma número/versão do modelo). */
 const CANDIDATE_DISTANCE = Number(process.env.CANDIDATE_DISTANCE ?? 0.3);
 /** Só cupons vistos recentemente: a ideia é oferecer coisas quentes. */
-const HOT_DAYS = Number(process.env.COUPON_HOT_DAYS ?? 14);
+const HOT_DAYS = Number(process.env.COUPON_HOT_DAYS ?? 2); // cupom de ML/Amazon dura horas ou poucos dias
 
 /** "Apple iPhone 17 256GB | Amazon.com.br" -> "Apple iPhone 17 256GB" */
 function cleanTitle(title: string): string {

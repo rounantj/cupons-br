@@ -11,6 +11,8 @@ export interface CreatorContent {
   live: boolean;
   /** temperatura/votos da comunidade (Pelando): negativo = "não funcionou" */
   votes?: number;
+  /** selo "Verificado hoje" do Pelando: a comunidade confirmou que o cupom funcionou hoje */
+  verified?: boolean;
 }
 
 export interface SourceResult { items: CreatorContent[]; detail: string }

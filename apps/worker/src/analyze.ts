@@ -131,7 +131,9 @@ async function scope(p: ProductCtx, c: CreatorContent, url: string | null, near:
   }
   // cupom de loja num agregador: o escopo vem escrito ("Selecionados", "itens de Casa"); sem escopo = geral
   // Promobit usa texto-modelo ("15% OFF em suas compras") até para cupom de marca (STANLEY15): sozinho não basta
-  if (c.source === "pelando") return { applies: true, confidence: 0.65, reason: "cupom da loja sem restrição (Pelando)" };
+  if (c.source === "pelando") return c.verified
+    ? { applies: true, confidence: 0.7, reason: "cupom da loja sem restrição, verificado hoje (Pelando)" }
+    : { applies: true, confidence: 0.4, reason: "cupom da loja sem verificação recente (Pelando)" };
   if (c.source === "promobit") return { applies: true, confidence: 0.5, reason: "cupom da loja no Promobit, sem escopo confirmado" };
   return SITEWIDE.test(near)
     ? { applies: true, confidence: 0.45, reason: "anunciado como válido no site todo — confira no carrinho" }
@@ -153,9 +155,8 @@ async function couponItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pr
   const cap = terms.cap ?? it.cap;
   const min = terms.min ?? it.min;
   const near = linesNear(c.text, code).join("\n");
-  // cupom de loja de agregador: o escopo escrito no card vale mais que a leitura da IA
-  const written = AGGREGATOR.has(c.source) && !isDeal(c) ? scopeFromText(c.text) : null;
-  const restriction = written ?? verifiedRestriction(it.restricted_to, text);
+  // cupom de loja de agregador: só o escopo escrito no card (a IA inventou "meli" — o nome da loja — como restrição)
+  const restriction = AGGREGATOR.has(c.source) && !isDeal(c) ? scopeFromText(c.text) : verifiedRestriction(it.restricted_to, text);
 
   let d: CouponDecision;
   const category = codeCategory(code);

@@ -107,7 +107,8 @@ export function categoryRule(productName: string, category: string): boolean | n
   return null;
 }
 
-export const SELECTED = /selecionad|eleg[íi]ve|participantes|da campanha|lojas? oficia|qualificad|itens da lista|leve \d+ (?:itens|produtos|unidades)|sele[çc][ãa]o de|outlet|perto do vencimento/i;
+/** Não vale para qualquer produto/comprador: itens selecionados, combos, outlet, só assinantes (Meli+, Prime). */
+export const SELECTED = /selecionad|eleg[íi]ve|participantes|da campanha|lojas? oficia|qualificad|itens da lista|leve \d+ (?:itens|produtos|unidades)|sele[çc][ãa]o de|outlet|perto do vencimento|meli\s*\+|exclusivo prime|\[prime\]|somente para (?:clientes )?meli/i;
 const GENERIC = new Set(["produtos", "produto", "itens", "item", "selecionados", "selecionadas", "participantes", "campanha",
   "lista", "loja", "site", "todo", "toda", "todos", "todas", "utilizado", "utilize", "valido", "limitado", "acima",
   "compras", "compra", "cupom", "desconto", "carrinho", "pedido", "pedidos", "liberado", "categoria", "categorias",

@@ -142,6 +142,8 @@ describe("plataformas e links", () => {
     expect(SELECTED.test("[Prime] Leve 3 itens da Lista e ganhe 15% OFF na Amazon · Sobre 1000 itens qualificados")).toBe(true);
     expect(SELECTED.test("Itens perto do Vencimento com 20% OFF · Seleção de itens")).toBe(true);
     expect(SELECTED.test("Exclusivo Prime: 40% off · Cupom Amazon: OUTLETPRIME")).toBe(true);
+    expect(SELECTED.test("[Meli+] Cupom Mercado Livre - 15% OFF acima de R$249")).toBe(true);
+    expect(SELECTED.test("Cupom Mercado Livre oferece R$ 150 OFF em R$ 1099 · DIZ SER TODO O SITE")).toBe(false);
     expect(SELECTED.test("CUPOM 25% OFF, Limite de R$ 500 OFF")).toBe(false);
   });
 });
