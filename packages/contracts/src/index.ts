@@ -105,3 +105,63 @@ export const CouponTestSchema = z.object({
   message: z.string().max(300).optional(),
 });
 export type CouponTest = z.infer<typeof CouponTestSchema>;
+
+// ───────────────────────── Notícias (segunda extensão: a mesma notícia em outros veículos) ─────────────────────────
+// POST /v1/news/lookups enfileira; GET /v1/news/lookups/:id acompanha até "done".
+
+/** O que a extensão extrai da matéria aberta (conteúdo público que o leitor já está vendo). */
+export const NewsPageSchema = z.object({
+  url: z.string().url().max(2000),
+  title: z.string().min(5).max(400),
+  description: z.string().max(1000).optional(),
+  siteName: z.string().max(120).optional(),
+  publishedAt: z.string().max(40).optional(),
+  image: z.string().url().max(2000).optional(),
+  text: z.string().max(8000).optional(),
+});
+export type NewsPage = z.infer<typeof NewsPageSchema>;
+export const CreateNewsLookupSchema = z.object({ page: NewsPageSchema });
+export type CreateNewsLookup = z.infer<typeof CreateNewsLookupSchema>;
+
+export type NewsStatus = "queued" | "collecting" | "analyzing" | "done" | "failed";
+export type NewsTone = "neutro" | "informativo" | "critico" | "favoravel" | "alarmista" | "opinativo" | "sensacionalista";
+
+export interface NewsSourceView {
+  ref: number;
+  site: string;
+  domain: string;
+  title: string;
+  url: string;
+  publishedAt: string | null;
+  /** prévia de link, como o WhatsApp (og:image / og:description) */
+  image: string | null;
+  description: string | null;
+  /** link passa pelo Google News (não temos a URL direta do veículo) */
+  viaGoogle: boolean;
+  /** só a manchete foi comparada (sem texto da matéria) */
+  headlineOnly: boolean;
+  similarity: number;
+}
+
+export interface NewsAnalysisView {
+  summary: string;
+  consensus: string[];
+  divergences: { topic: string; positions: { ref: number; site: string; says: string }[] }[];
+  sources: { ref: number; site: string; tone: NewsTone; framing: string; emphasis: string; voices: string[]; loadedWords: string[]; evidence: string | null }[];
+  missing: string[];
+  balance: string;
+}
+
+export interface NewsLookupView {
+  id: string;
+  status: NewsStatus;
+  /** classificação da IA: tipo (news, product…) e nicho (politica, economia…) */
+  kind: string | null;
+  niche: string | null;
+  /** ref 0 = a matéria que o leitor está lendo */
+  article: NewsSourceView | null;
+  related: NewsSourceView[];
+  analysis: NewsAnalysisView | null;
+  createdAt: string;
+  finishedAt: string | null;
+}

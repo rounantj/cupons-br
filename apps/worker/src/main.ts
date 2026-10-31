@@ -1,9 +1,10 @@
 /** Worker: consome as filas do pg-boss (Postgres). Sem HTTP. */
-import { cacheSweep, getQueue, one, query, QUEUES, AnalyzeJob, CollectJob, LinkJob } from "@cupons/db";
+import { cacheSweep, getQueue, one, query, QUEUES, AnalyzeJob, CollectJob, LinkJob, NewsJob } from "@cupons/db";
 import { CreatorContent } from "@cupons/sources";
 import { analyzeBatch } from "./analyze";
 import { handleCollect, sourceRun } from "./collect";
 import { handleLink } from "./link";
+import { handleNewsAnalyze, handleNewsCollect } from "./news";
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
 
@@ -62,12 +63,32 @@ async function main() {
     }
   });
 
+  // segunda extensão (notícias): filas próprias, mesmo worker
+  const newsFail = async (lookupId: string, e: Error) =>
+    query("UPDATE news_lookups SET status = 'failed', error = $2, finished_at = now() WHERE id = $1", [lookupId, e.message.slice(0, 500)]);
+  await queue.work<NewsJob>(QUEUES.newsCollect, async ([job]) => {
+    try { await handleNewsCollect(job.data); } catch (e) { await newsFail(job.data.lookupId, e as Error); throw e; }
+  });
+  for (let i = 0; i < 2; i++) {
+    await queue.work<NewsJob>(QUEUES.newsAnalyze, { includeMetadata: true }, async ([job]) => {
+      try { await handleNewsAnalyze(job.data); } catch (e) {
+        // análise falhou de vez: a lista de coberturas continua útil sem ela
+        if (job.retryCount >= job.retryLimit) {
+          await query("UPDATE news_lookups SET status = 'done', error = $2, finished_at = now() WHERE id = $1", [job.data.lookupId, (e as Error).message.slice(0, 500)]);
+        } else throw e;
+      }
+    });
+  }
+
   await queue.schedule(QUEUES.maintenance, "*/15 * * * *");
   await queue.work(QUEUES.maintenance, async () => {
     log(`cache: ${await cacheSweep()} entradas expiradas removidas`);
     // retenção prometida na política de privacidade: contexto das buscas (URL da página) por 90 dias
     const old = await query("DELETE FROM searches WHERE created_at < now() - interval '90 days' RETURNING 1");
     if (old.length) log(`retenção: ${old.length} buscas com mais de 90 dias removidas`);
+    // notícias: o índice dos feeds só serve para achar coberturas próximas no tempo
+    await query("DELETE FROM news_lookups WHERE created_at < now() - interval '90 days'");
+    await query("DELETE FROM news_articles a WHERE created_at < now() - interval '30 days' AND NOT EXISTS (SELECT 1 FROM news_lookups l WHERE l.article_id = a.id)");
   });
   log(`worker pronto (análise com ${concurrency} consumidores)`);
 }

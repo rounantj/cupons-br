@@ -32,14 +32,16 @@ export function strictSchema(schema: JsonSchema): JsonSchema {
 
 export interface ChatUsage { prompt_tokens: number; completion_tokens: number }
 
-export async function chatJson<T>(system: string, user: string, schema: JsonSchema): Promise<{ data: T; usage: ChatUsage | null }> {
-  const model = MODEL();
+export interface ChatOptions { model?: string; reasoningEffort?: "minimal" | "low" | "medium" | "high" }
+
+export async function chatJson<T>(system: string, user: string, schema: JsonSchema, opts: ChatOptions = {}): Promise<{ data: T; usage: ChatUsage | null }> {
+  const model = opts.model || MODEL();
   const body: JsonSchema = {
     model,
     messages: [{ role: "system", content: system }, { role: "user", content: user }],
     response_format: { type: "json_schema", json_schema: { name: "report", strict: true, schema: strictSchema(schema) } },
   };
-  if (/^(gpt-5|o\d)/.test(model)) body.reasoning_effort = process.env.OPENAI_REASONING_EFFORT || "minimal";
+  if (/^(gpt-5|o\d)/.test(model)) body.reasoning_effort = opts.reasoningEffort || process.env.OPENAI_REASONING_EFFORT || "minimal";
   else body.temperature = 0;
   const r = await fetch(`${API}/chat/completions`, {
     method: "POST",

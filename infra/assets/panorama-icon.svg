@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Panorama: um feixe (a notícia) entra no prisma e sai em várias cores (as versões) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <path d="M10 70 L50 62" stroke="#f8fafc" stroke-width="7" stroke-linecap="round"/>
+  <path d="M74 56 L118 38" stroke="#38bdf8" stroke-width="9" stroke-linecap="round"/>
+  <path d="M76 64 L118 64" stroke="#fbbf24" stroke-width="9" stroke-linecap="round"/>
+  <path d="M74 72 L118 90" stroke="#f472b6" stroke-width="9" stroke-linecap="round"/>
+  <path d="M64 26 L94 90 L34 90 Z" fill="#f8fafc" fill-opacity=".14" stroke="#f8fafc" stroke-width="7" stroke-linejoin="round"/>
+</svg>

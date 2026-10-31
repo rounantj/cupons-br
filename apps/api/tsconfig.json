@@ -1,2 +1,2 @@
 { "extends": "../../tsconfig.base.json", "compilerOptions": { "rootDir": "src", "outDir": "dist" }, "include": ["src"],
-  "references": [{ "path": "../../packages/ai" }, { "path": "../../packages/contracts" }, { "path": "../../packages/core" }, { "path": "../../packages/db" }] }
+  "references": [{ "path": "../../packages/ai" }, { "path": "../../packages/contracts" }, { "path": "../../packages/core" }, { "path": "../../packages/db" }, { "path": "../../packages/sources" }] }

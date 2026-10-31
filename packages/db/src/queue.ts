@@ -7,11 +7,15 @@ export const QUEUES = {
   analyze: "search.analyze",
   link: "search.link",
   maintenance: "maintenance",
+  // segunda extensão: notícias
+  newsCollect: "news.collect",
+  newsAnalyze: "news.analyze",
 } as const;
 
 export interface CollectJob { searchId: string; productId: string; mode: "full" | "refresh" }
 export interface AnalyzeJob { searchId: string; productId: string; batch: unknown[] }
 export interface LinkJob { searchId: string; productId: string }
+export interface NewsJob { lookupId: string }
 
 let boss: PgBoss | null = null;
 
