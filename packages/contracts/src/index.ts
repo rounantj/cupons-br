@@ -56,7 +56,12 @@ export interface CouponView {
   seenAt: string[];
   /** NOSSO link do produto na mesma plataforma, para usar o cupom no carrinho */
   buyUrl: string | null;
+  /** último teste "funcionou" num checkout real (só cupons testados aparecem na notificação) */
+  verifiedAt: string;
 }
+
+/** Cupom ainda não testado: a extensão testa no checkout e só então ele vira CouponView. */
+export interface CandidateView { code: string; platform: Platform | string }
 
 export interface AffiliateLinkView {
   platform: Platform | string;
@@ -78,9 +83,25 @@ export interface SearchView {
   /** URL que o usuário estava navegando quando a busca começou (ele pode ter mudado de aba) */
   originUrl: string | null;
   product: { id: string; name: string } | null;
+  /** só cupons que funcionaram num checkout real recente */
   coupons: CouponView[];
+  /** cupons achados nas fontes, ainda sem teste: a extensão testa no checkout */
+  candidates: CandidateView[];
   affiliateLinks: AffiliateLinkView[];
   progress: { pendingBatches: number; sources: { source: string; status: string; items: number; detail: string | null }[] };
   createdAt: string;
   finishedAt: string | null;
 }
+
+export const COUPON_TEST_RESULTS = ["works", "not_applicable", "expired", "invalid", "unknown"] as const;
+export type CouponTestResult = (typeof COUPON_TEST_RESULTS)[number];
+
+/** POST /v1/coupon-tests: resultado de um cupom testado no checkout (sem dado pessoal). */
+export const CouponTestSchema = z.object({
+  productIds: z.array(z.string().uuid()).max(10).default([]),
+  platform: z.enum(PLATFORMS),
+  code: z.string().min(3).max(40),
+  result: z.enum(COUPON_TEST_RESULTS),
+  message: z.string().max(300).optional(),
+});
+export type CouponTest = z.infer<typeof CouponTestSchema>;

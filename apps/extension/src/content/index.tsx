@@ -4,7 +4,8 @@
  */
 import { createRoot, Root } from "react-dom/client";
 import type { SearchView } from "@cupons/contracts";
-import type { Reply, Request } from "../messages";
+import type { Request, StoredCandidate, ViewReply } from "../messages";
+import { CheckoutTester, isMlCouponPage, ML_PLATFORM } from "./checkout";
 import { detectProduct, isProductPage, pageCoupon, PageCoupon } from "./detect";
 import { CSS } from "./styles";
 import { Searching, Toast } from "./Toast";
@@ -16,7 +17,7 @@ let root: Root | null = null;
 let host: HTMLElement | null = null;
 let currentRun = 0;
 
-const send = (msg: Request) => chrome.runtime.sendMessage(msg) as Promise<Reply>;
+const send = (msg: Request) => chrome.runtime.sendMessage(msg) as Promise<ViewReply>;
 
 async function settings(): Promise<{ enabled: boolean; hiddenSites: string[] }> {
   const s = await chrome.storage.local.get({ enabled: true, hiddenSites: [] as string[] });
@@ -102,13 +103,32 @@ async function run() {
   if (onPage || worthShowing(reply.view)) showResult(reply.view, onPage);
 }
 
-// Primeira carga (aguarda o JSON-LD/título da loja) + mudanças de URL sem recarga.
-// Saiu para uma página que não é de produto: a busca anterior continua e a notificação aponta a URL original.
-let lastUrl = location.href;
-setTimeout(run, 1200);
-setInterval(() => {
-  if (location.href !== lastUrl) {
-    lastUrl = location.href;
-    if (isProductPage()) setTimeout(run, 1200);
-  }
-}, 1000);
+/** Tela de cupons do checkout do ML (às vezes dentro de um iframe): oferece testar os candidatos das buscas recentes. */
+async function checkout() {
+  const { enabled } = await settings();
+  if (!enabled) return;
+  const reply = (await chrome.runtime.sendMessage({ type: "candidates", platform: ML_PLATFORM } satisfies Request)) as
+    { ok: true; candidates: StoredCandidate[] } | { ok: false };
+  if (!reply.ok || !reply.candidates.length) return;
+  mount(
+    <CheckoutTester candidates={reply.candidates.slice(0, 8)} onClose={unmount}
+      onResult={(c, o) => void chrome.runtime.sendMessage({ type: "report", platform: c.platform, code: c.code,
+        result: o.result, message: o.message, productIds: c.productIds } satisfies Request)} />,
+  );
+}
+
+if (isMlCouponPage()) {
+  setTimeout(checkout, 800);
+} else if (window.top === window) {
+  // Primeira carga (aguarda o JSON-LD/título da loja) + mudanças de URL sem recarga.
+  // Saiu para uma página que não é de produto: a busca anterior continua e a notificação aponta a URL original.
+  let lastUrl = location.href;
+  setTimeout(run, 1200);
+  setInterval(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      if (isProductPage()) setTimeout(run, 1200);
+      else if (isMlCouponPage()) setTimeout(checkout, 800);
+    }
+  }, 1000);
+}

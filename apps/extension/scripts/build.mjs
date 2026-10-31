@@ -34,7 +34,8 @@ const base = {
   action: { default_popup: "popup/src/popup/index.html", default_icon: { 16: "icons/16.png", 32: "icons/32.png" } },
   permissions: ["storage"],
   host_permissions: [apiOrigin],
-  content_scripts: [{ matches, js: ["content.js"], run_at: "document_idle" }],
+  // all_frames: a tela de cupons do checkout do ML pode abrir num iframe (o script só age nela; produto só no topo)
+  content_scripts: [{ matches, js: ["content.js"], run_at: "document_idle", all_frames: true }],
 };
 
 const targets = {

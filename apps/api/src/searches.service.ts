@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { embed } from "@cupons/ai";
 import { AffiliateLinkView, CouponView, CreateSearch, SearchMode, SearchView } from "@cupons/contracts";
-import { canonicalKey, credentialsFromEnv, discountLabel, expiredByCode, finalPrice, MIN_CONFIDENCE, ourLink, productOf, ProductRef, sameProduct } from "@cupons/core";
+import { canonicalKey, credentialsFromEnv, discountLabel, expiredByCode, finalPrice, ourLink, productOf, ProductRef, sameProduct } from "@cupons/core";
 import { getQueue, one, query, QUEUES, toVector } from "@cupons/db";
 
 /** Produto com busca completa mais nova que isto não é recatalogado (só os cupons são reaquecidos). */
@@ -11,6 +11,8 @@ const COUPON_TTL_MINUTES = Number(process.env.COUPON_TTL_MINUTES ?? 60);
 /** Distância de cosseno máxima para um produto ser CANDIDATO (o código confirma número/versão do modelo). */
 const CANDIDATE_DISTANCE = Number(process.env.CANDIDATE_DISTANCE ?? 0.3);
 /** Só cupons vistos recentemente: a ideia é oferecer coisas quentes. */
+/** Candidato a teste no checkout: inclui "produtos selecionados" (0,3); fica de fora só o que foi descartado. */
+const CANDIDATE_CONFIDENCE = 0.25;
 const HOT_DAYS = Number(process.env.COUPON_HOT_DAYS ?? 2); // cupom de ML/Amazon dura horas ou poucos dias
 
 /** "Apple iPhone 17 256GB | Amazon.com.br" -> "Apple iPhone 17 256GB" */
@@ -142,10 +144,25 @@ export class SearchesService {
       `SELECT c.code, c.platform, c.discount_kind, c.discount_value::float AS value, c.discount_cap::float AS cap,
               c.min_purchase::float AS min, c.conditions, c.last_seen_at, pc.confidence,
               (SELECT array_agg(DISTINCT cs.creator) FROM (SELECT creator FROM coupon_sightings
-                WHERE coupon_id = c.id AND creator IS NOT NULL ORDER BY seen_at DESC LIMIT 3) cs) AS seen_at
+                WHERE coupon_id = c.id AND creator IS NOT NULL ORDER BY seen_at DESC LIMIT 3) cs) AS seen_at,
+              -- prova: funcionou num checkout real com este produto nas últimas 24 h
+              (SELECT max(t.tested_at) FROM coupon_tests t WHERE t.product_id = $1 AND t.platform = c.platform
+                 AND t.code_norm = c.code_norm AND t.result = 'works' AND t.tested_at > now() - interval '24 hours') AS works_at,
+              -- recusado para este produto, ou expirado/inválido para todos, depois do último "funcionou"
+              EXISTS (SELECT 1 FROM coupon_tests t WHERE t.platform = c.platform AND t.code_norm = c.code_norm
+                 AND t.tested_at > now() - interval '24 hours'
+                 AND (t.result IN ('expired', 'invalid') OR (t.result = 'not_applicable' AND t.product_id = $1))
+                 AND t.tested_at > coalesce((SELECT max(w.tested_at) FROM coupon_tests w WHERE w.product_id = $1
+                   AND w.platform = c.platform AND w.code_norm = c.code_norm AND w.result = 'works'), 'epoch')) AS refused
        FROM product_coupons pc JOIN coupons c ON c.id = pc.coupon_id
        WHERE pc.product_id = $1 AND pc.applies AND pc.confidence >= $3 AND c.last_seen_at > now() - make_interval(days => $2)`,
-      [s.product_id, HOT_DAYS, MIN_CONFIDENCE]);
+      [s.product_id, HOT_DAYS, CANDIDATE_CONFIDENCE]);
+    const live = rows.filter((r) => !r.refused && !expiredByCode(r.code));
+    // candidatos: ainda sem teste; o checkout decide (inclui "produtos selecionados": só o carrinho sabe)
+    const perPlatform = new Map<string, number>();
+    const candidates = live.filter((r) => !r.works_at).sort((a, b) => b.confidence - a.confidence)
+      .filter((r) => { const n = perPlatform.get(r.platform) ?? 0; perPlatform.set(r.platform, n + 1); return n < 8; })
+      .map((r) => ({ code: r.code, platform: r.platform }));
 
     const cheapest = new Map<string, AffiliateLinkView>();
     for (const l of affiliateLinks) {
@@ -155,8 +172,7 @@ export class SearchesService {
     }
     // Sem preço do produto na plataforma do cupom: estima o % efetivo pelo preço da página/outra loja
     const pagePrice: number | null = s.page?.price ?? affiliateLinks.find((l) => l.price)?.price ?? null;
-    const coupons: CouponView[] = rows.flatMap((r) => {
-      if (expiredByCode(r.code)) return [];
+    const coupons: CouponView[] = live.filter((r) => r.works_at).flatMap((r) => {
       const terms = { kind: r.discount_kind, value: r.value, cap: r.cap, min: r.min };
       const listing = cheapest.get(r.platform);
       const base = listing?.price ?? pagePrice;
@@ -180,6 +196,7 @@ export class SearchesService {
         lastSeenAt: new Date(r.last_seen_at).toISOString(),
         seenAt: r.seen_at ?? [],
         buyUrl: listing?.affiliateUrl ?? null,
+        verifiedAt: new Date(r.works_at).toISOString(),
       }];
     });
     // Melhor primeiro: confiança × desconto × "quentura" (decai em ~3 dias)
@@ -196,6 +213,7 @@ export class SearchesService {
       originUrl,
       product: s.product_id ? { id: s.product_id, name: s.product_name } : null,
       coupons: coupons.slice(0, 20),
+      candidates,
       affiliateLinks,
       progress: { pendingBatches: s.pending, sources },
       createdAt: new Date(s.created_at).toISOString(),
