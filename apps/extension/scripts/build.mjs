@@ -29,7 +29,7 @@ const base = {
   name: "Cupons BR — cupons no produto que você vê",
   short_name: "Cupons BR",
   version: pkg.version,
-  description: "Mostra cupons ativos e o melhor preço do produto que você está vendo na Amazon, Mercado Livre, Shopee e outras lojas.",
+  description: "Mostra cupons que funcionam e o desconto real do produto que você está vendo nas grandes lojas on-line do Brasil.",
   icons: { 16: "icons/16.png", 32: "icons/32.png", 48: "icons/48.png", 128: "icons/128.png" },
   action: { default_popup: "popup/src/popup/index.html", default_icon: { 16: "icons/16.png", 32: "icons/32.png" } },
   permissions: ["storage"],

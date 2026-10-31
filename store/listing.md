@@ -4,22 +4,25 @@
 Cupons BR — cupons no produto que você vê
 
 ## Resumo (até 132 caracteres)
-Mostra cupons ativos e o melhor preço do produto que você está vendo na Amazon, Mercado Livre, Shopee e outras lojas.
+Mostra cupons que funcionam e o desconto real do produto que você está vendo nas grandes lojas on-line do Brasil.
 
 ## Descrição
-Pare de procurar cupom em dezenas de sites. Abra um produto na Amazon, Mercado Livre, Shopee, Magazine Luiza, KaBuM,
-Casas Bahia ou Americanas e o Cupons BR mostra, num cantinho discreto da tela:
+<!-- Chrome rejeitou a 0.1.0 (Yellow Argon) por "palavras-chave excessivas": a lista de 7 lojas. Não listar marcas. -->
+Pare de procurar cupom em dezenas de sites. Ao abrir a página de um produto numa grande loja on-line brasileira,
+o Cupons BR mostra, num cantinho discreto da tela, os cupons que valem para aquele produto.
 
-• Cupons quentes, divulgados nos últimos dias por canais de ofertas
-• O desconto REAL no seu produto — já com teto e compra mínima aplicados (um cupom de "15% até R$ 500" num produto
-  de R$ 8.877 aparece como ≈ 5,6%, sem pegadinha)
+O que você vê:
+• O cupom que a própria loja oferece no anúncio, com um atalho para ativá-lo
+• Cupons recentes avaliados pela comunidade de ofertas, só quando há sinal de que valem para o seu produto
+• O desconto real no seu produto, já com teto e compra mínima aplicados: um cupom de "15% até R$ 500" num produto
+  de R$ 8.877 aparece como cerca de 5,6%
 • Botão para copiar o código
 • O preço do mesmo produto em outras lojas, quando encontramos
 
 Discreto de verdade:
 • Só aparece quando há vantagem real
-• Fecha ou minimiza com um clique; oculte em qualquer site
-• Não pede cadastro, não lê senhas, formulários nem seu histórico
+• Fecha ou minimiza com um clique, e pode ser ocultado em qualquer site
+• Não pede cadastro e não lê senhas, formulários nem o seu histórico
 
 Transparência: alguns links são de afiliado. Se você comprar por eles, podemos ganhar uma comissão, sem custo extra
 para você. Nada é aberto ou alterado sem o seu clique.
