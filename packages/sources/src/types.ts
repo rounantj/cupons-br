@@ -1,6 +1,6 @@
-/** Conteúdo de influenciador (vídeo do YouTube ou post do Telegram) a ser analisado pela IA. */
+/** Conteúdo a ser analisado pela IA: vídeo do YouTube, post do Telegram ou oferta/cupom de agregador. */
 export interface CreatorContent {
-  source: "youtube" | "telegram";
+  source: "youtube" | "telegram" | "pelando" | "promobit";
   sourceUrl: string;
   title: string;
   creator: string;
@@ -9,6 +9,8 @@ export interface CreatorContent {
   comments: string[];
   publishedAt: string;
   live: boolean;
+  /** temperatura/votos da comunidade (Pelando): negativo = "não funcionou" */
+  votes?: number;
 }
 
 export interface SourceResult { items: CreatorContent[]; detail: string }

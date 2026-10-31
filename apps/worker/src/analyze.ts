@@ -10,14 +10,15 @@
  *  - cupom de influenciador sem link de produto (vitrine/campanha) vale só em "produtos selecionados":
  *    no teste real, COMPRAS e AQUITEMTECH (ML, "15% até R$500") não aplicaram num iPhone
  *  - sinal de comentário só quando há comentários (Telegram não tem; a IA inventava "funcionou")
+ *  - agregadores (Pelando/Promobit): cupom de loja sem restrição escrita vale como geral; votos da comunidade pesam
  */
 import { CREATOR_SCHEMA, CREATOR_SYSTEM, CreatorItem, FIT_SCHEMA, FIT_SYSTEM, chatJson } from "@cupons/ai";
 import {
-  FOREIGN_URL, SELECTED, brlAmounts, cleanStore, codeCategory, commentSignal, couponForOtherModel, isCode, linesNear, modelConflict,
-  platformOf, productMismatch, productOf, termsNearCode, verifiedRestriction,
+  FOREIGN_URL, SELECTED, brlAmounts, categoryRule, expiredByCode, cleanStore, codeCategory, commentSignal, couponForOtherModel, isCode, linesNear, modelConflict,
+  platformOf, productMismatch, productOf, scopeFromText, termsNearCode, verifiedRestriction,
 } from "@cupons/core";
 import { cached, one, query } from "@cupons/db";
-import { CreatorContent, resolveUrl } from "@cupons/sources";
+import { CreatorContent, resolveUrl, shortName } from "@cupons/sources";
 
 export interface ProductCtx { id: string; name: string; referencePrice: number | null }
 
@@ -48,6 +49,8 @@ function verifiedUrl(c: CreatorContent, url: string | null, code: string | null)
 
 /** "O produto pertence à categoria X?" — pergunta binária isolada, cacheada por produto+categoria. */
 async function categoryFits(productName: string, category: string): Promise<boolean> {
+  const rule = categoryRule(productName, category);
+  if (rule !== null) return rule;
   return cached(`fit:${productName.toLowerCase()}:${category}`, 30 * 86400, async () => {
     const { data } = await chatJson<{ items: { category: string; fits: boolean }[] }>(
       FIT_SYSTEM, `PRODUTO: ${productName}\nCATEGORIAS:\n- ${category}`, FIT_SCHEMA);
@@ -62,6 +65,13 @@ function adjust(c: CreatorContent, it: CreatorItem, code: string | null, confide
   if (signal && SIGNAL[signal]) {
     delta += SIGNAL[signal][0];
     reason += ` · ${SIGNAL[signal][1]}`;
+  }
+  if (c.votes !== undefined && c.votes < 0) {
+    delta -= 0.5;
+    reason += ` · comunidade esfriou (${c.votes}°)`;
+  } else if ((c.votes ?? 0) >= 100) {
+    delta += 0.1;
+    reason += ` · comunidade aprovou (${c.votes}°)`;
   }
   if (c.live || Date.parse(c.publishedAt) > Date.now() - 48 * 3600_000) delta += 0.05;
   return [Math.max(0.05, Math.min(0.95, confidence + delta)), reason];
@@ -105,15 +115,22 @@ async function priceItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pro
 interface CouponDecision { applies: boolean; confidence: number; reason: string }
 
 const SITEWIDE = /todo (o )?site|site todo|site inteiro|qualquer produto/i;
+const AGGREGATOR = new Set(["pelando", "promobit"]);
+/** Oferta de um produto no Pelando: o cupom foi usado naquele produto ("selecionados" inclui ele). */
+const isDeal = (c: CreatorContent) => c.source === "pelando" && c.sourceUrl.includes("/d/");
+const label = (c: CreatorContent) => (c.source === "pelando" ? "Pelando" : "Promobit");
 
 /** Sem restrição explícita: o link do post diz para que o cupom foi divulgado. */
 async function scope(p: ProductCtx, c: CreatorContent, url: string | null, near: string): Promise<CouponDecision> {
   const ref = url ? productOf(await resolveUrl(url)) : null;
   if (ref) {
-    return productMismatch(p.name, `${c.title}\n${c.text}`)
-      ? { applies: true, confidence: 0.25, reason: "divulgado junto com outro produto — confira no carrinho" }
-      : { applies: true, confidence: 0.75, reason: "divulgado junto com este produto" };
+    if (productMismatch(shortName(p.name), `${c.title}\n${c.text}`))
+      return { applies: true, confidence: 0.25, reason: "divulgado junto com outro produto — confira no carrinho" };
+    return { applies: true, confidence: AGGREGATOR.has(c.source) ? 0.8 : 0.75,
+      reason: AGGREGATOR.has(c.source) ? `usado neste produto (oferta no ${label(c)})` : "divulgado junto com este produto" };
   }
+  // cupom de loja num agregador: o escopo vem escrito ("Selecionados", "itens de Casa"); sem escopo = geral
+  if (AGGREGATOR.has(c.source)) return { applies: true, confidence: 0.65, reason: `cupom da loja sem restrição (${label(c)})` };
   return SITEWIDE.test(near)
     ? { applies: true, confidence: 0.45, reason: "anunciado como válido no site todo — confira no carrinho" }
     : { applies: true, confidence: 0.3, reason: "cupom de campanha: vale em produtos selecionados — confira no carrinho" };
@@ -123,7 +140,7 @@ async function couponItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pr
   const code = (it.code ?? "").trim();
   const text = sourceText(c);
   if (!code) return (await priceItem(p, c, { ...it, price: it.price })) ? "saved" : "skipped";
-  if (!text.toLowerCase().includes(code.toLowerCase()) || !isCode(code)) return "skipped";
+  if (!text.toLowerCase().includes(code.toLowerCase()) || !isCode(code) || expiredByCode(code)) return "skipped";
   const url = verifiedUrl(c, it.url, code);
   const platform = platformOf(cleanStore(it.store), url);
   if (!platform) return "skipped"; // fora das plataformas conhecidas: patrocínio do canal
@@ -134,7 +151,9 @@ async function couponItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pr
   const cap = terms.cap ?? it.cap;
   const min = terms.min ?? it.min;
   const near = linesNear(c.text, code).join("\n");
-  const restriction = verifiedRestriction(it.restricted_to, text);
+  // cupom de loja de agregador: o escopo escrito no card vale mais que a leitura da IA
+  const written = AGGREGATOR.has(c.source) && !isDeal(c) ? scopeFromText(c.text) : null;
+  const restriction = written ?? verifiedRestriction(it.restricted_to, text);
 
   let d: CouponDecision;
   const category = codeCategory(code);
@@ -145,7 +164,7 @@ async function couponItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pr
   else if (restriction === "?") d = { applies: false, confidence: 0, reason: "restrição citada não confirmada no texto" };
   else if (restriction && !(await categoryFits(p.name, restriction))) d = { applies: false, confidence: 0, reason: `restrito a: ${restriction}` };
   else if (restriction) d = { applies: true, confidence: SELECTED.test(near) ? 0.4 : 0.7, reason: `categoria compatível: ${restriction}` };
-  else if (SELECTED.test(near)) d = { applies: true, confidence: 0.3, reason: "só itens elegíveis/selecionados — confira no carrinho" };
+  else if (!isDeal(c) && SELECTED.test(AGGREGATOR.has(c.source) ? c.text : near)) d = { applies: true, confidence: 0.3, reason: "só itens elegíveis/selecionados — confira no carrinho" };
   else d = await scope(p, c, url, near);
   if (d.applies) [d.confidence, d.reason] = adjust(c, it, code, d.confidence, d.reason);
   if (it.conditions) d.reason += ` · condições: ${it.conditions}`;
@@ -185,6 +204,7 @@ async function couponItem(p: ProductCtx, c: CreatorContent, it: CreatorItem): Pr
 }
 
 async function recordHit(creatorId: string) {
+  if (!/^(tg|yt):/.test(creatorId)) return;
   if (creatorId.startsWith("tg:")) await query("UPDATE telegram_channels SET coupon_hits = coupon_hits + 1 WHERE username = $1", [creatorId.slice(3)]);
   else await query("UPDATE youtube_channels SET coupon_hits = coupon_hits + 1, last_hit_at = now() WHERE channel_id = $1", [creatorId.slice(3)]);
 }

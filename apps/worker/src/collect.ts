@@ -1,7 +1,14 @@
-/** search.collect: busca conteúdos quentes e divide em lotes para a IA. */
+/**
+ * search.collect: raspa as fontes em ordem, da mais certeira para a mais lenta, até achar cupom útil.
+ *  1. agregadores (ofertas do produto no Pelando + cupons das lojas) — analisados aqui mesmo, em segundos
+ *  2. só se nada útil apareceu: YouTube + Telegram, em lotes na fila de análise
+ */
+import type { Platform } from "@cupons/contracts";
+import { MIN_CONFIDENCE, platformOf } from "@cupons/core";
 import { embed } from "@cupons/ai";
 import { getQueue, one, query, QUEUES, toVector, CollectJob } from "@cupons/db";
-import { collectTelegram, collectYoutube, CreatorContent, SourceResult, youtubeEnabled } from "@cupons/sources";
+import { collectAggregators, collectTelegram, collectYoutube, CreatorContent, SourceResult, youtubeEnabled } from "@cupons/sources";
+import { analyzeBatch } from "./analyze";
 
 const BATCH = Number(process.env.ANALYZE_BATCH_SIZE ?? 6);
 
@@ -60,14 +67,27 @@ export async function handleCollect(job: CollectJob) {
   }
   if (mode === "full") await sourceRun(searchId, "reaproveitamento", "ok", await reuseFromSimilar(productId), 0, "cupons quentes de produtos parecidos (vetor)");
 
-  // YouTube primeiro: as descrições alimentam a descoberta de canais do Telegram
+  // 1. Agregadores: rápido e certeiro
+  const ctx = { id: productId, name: product.name, referencePrice: null };
+  const stores = await storesOf(searchId, productId);
+  const found = await timed(searchId, "agregadores", () => collectAggregators(product.name, stores));
+  const batchesA = chunk(found);
+  await Promise.all(batchesA.map((b) => analyzeBatch(ctx, b).catch((e) => console.error("analyze agregadores:", (e as Error).message))));
+  if (await hasUsefulCoupon(productId)) {
+    const why = "cupom útil já encontrado nos agregadores";
+    await sourceRun(searchId, "youtube", "skipped", 0, 0, why);
+    await sourceRun(searchId, "telegram", "skipped", 0, 0, why);
+    await query("UPDATE searches SET status = 'linking', pending = 0 WHERE id = $1", [searchId]);
+    await (await getQueue()).send(QUEUES.link, { searchId, productId });
+    return;
+  }
+
+  // 2. YouTube primeiro: as descrições alimentam a descoberta de canais do Telegram
   const videos = youtubeEnabled() ? await timed(searchId, "youtube", () => collectYoutube(product.name)) : [];
   if (!youtubeEnabled()) await sourceRun(searchId, "youtube", "skipped", 0, 0, "defina YOUTUBE_API_KEY");
   const posts = await timed(searchId, "telegram", () => collectTelegram(product.name));
 
-  const all = [...posts, ...videos];
-  const batches: CreatorContent[][] = [];
-  for (let i = 0; i < all.length; i += BATCH) batches.push(all.slice(i, i + BATCH));
+  const batches = chunk([...posts, ...videos]);
   const queue = await getQueue();
   if (!batches.length) {
     await query("UPDATE searches SET status = 'linking', pending = 0 WHERE id = $1", [searchId]);
@@ -76,4 +96,26 @@ export async function handleCollect(job: CollectJob) {
   }
   await query("UPDATE searches SET status = 'analyzing', pending = $2 WHERE id = $1", [searchId, batches.length]);
   for (const batch of batches) await queue.send(QUEUES.analyze, { searchId, productId, batch }, { retryLimit: 2, retryDelay: 10 });
+}
+
+function chunk(items: CreatorContent[]): CreatorContent[][] {
+  const out: CreatorContent[][] = [];
+  for (let i = 0; i < items.length; i += BATCH) out.push(items.slice(i, i + BATCH));
+  return out;
+}
+
+/** Lojas onde o produto está à venda: a página de origem primeiro, depois as listings conhecidas. */
+async function storesOf(searchId: string, productId: string): Promise<Platform[]> {
+  const origin = await one<{ url: string | null }>("SELECT page->>'url' AS url FROM searches WHERE id = $1", [searchId]);
+  const listed = await query<{ platform: Platform }>("SELECT DISTINCT platform FROM listings WHERE product_id = $1", [productId]);
+  const all = [platformOf(null, origin?.url), ...listed.map((l) => l.platform)].filter((p): p is Platform => Boolean(p));
+  return [...new Set(all.length ? all : (["Mercado Livre", "Amazon"] as Platform[]))].slice(0, 3);
+}
+
+async function hasUsefulCoupon(productId: string): Promise<boolean> {
+  return Boolean(await one(
+    `SELECT 1 FROM product_coupons pc JOIN coupons c ON c.id = pc.coupon_id
+     WHERE pc.product_id = $1 AND pc.applies AND pc.confidence >= $2
+       AND c.last_seen_at > now() - make_interval(days => $3) LIMIT 1`,
+    [productId, MIN_CONFIDENCE, Number(process.env.COUPON_HOT_DAYS ?? 14)]));
 }

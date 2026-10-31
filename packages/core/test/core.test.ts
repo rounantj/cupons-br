@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   brlAmounts, canonicalKey, codeCategory, couponForOtherModel, credentialsFromEnv, discountLabel, finalPrice, isCode, modelConflict, offCategory,
-  ourLink, parseTerms, platformOf, productMismatch, productOf, sameProduct, termsNearCode, verifiedRestriction,
+  ourLink, parseTerms, platformOf, productMismatch, productOf, sameProduct, scopeFromText, expiredByCode, categoryRule, termsNearCode, verifiedRestriction,
 } from "../src";
 
 describe("parseTerms", () => {
@@ -72,6 +72,9 @@ describe("produto e modelo", () => {
     expect(sameProduct("Apple iPhone 17 256GB", "iphone 17 de 256 gb da apple")).toBe(true);
     expect(sameProduct("Apple iPhone 17 256GB", "iPhone 17 Pro 256GB")).toBe(false);
     expect(sameProduct("Apple iPhone 17 256GB", "iPhone 17 512GB")).toBe(false);
+    expect(sameProduct("Fritadeira Air Fryer Philco 15L", "Fritadeira Air Fryer Mondial 4L")).toBe(false);
+    expect(sameProduct("Air Fryer Philco 4L", "Air Fryer Mondial 4L")).toBe(false);
+    expect(sameProduct("iPhone 18 Pro Max 512GB Bordô - Distribuidor Autorizado", "iPhone 18 Pro Max 512GB Bordô")).toBe(true);
   });
   it("cupom geral vale para modelo com qualificador; cupom de outro modelo não", () => {
     expect(couponForOtherModel("Apple iPhone 17 Pro 256GB", "🎟 10% OFF em R$149, Limite de R$ 200: AQUITEMTECH")).toBeNull();
@@ -104,5 +107,29 @@ describe("plataformas e links", () => {
     const ml = productOf("https://www.mercadolivre.com.br/p/MLB66130045?matt_tool=38524122")!;
     expect(ourLink(ml, credentialsFromEnv({ ML_AFFILIATE_WORD: "w", ML_AFFILIATE_TOOL: "1" })).url)
       .toBe("https://www.mercadolivre.com.br/p/MLB66130045?matt_word=w&matt_tool=1");
+  });
+  it("escopo escrito no cupom de loja (agregadores)", () => {
+    expect(scopeFromText("Cupom Mercado Livre - R$45 OFF acima de R$299 · Em itens Auto ..")).toBe("auto");
+    expect(scopeFromText("20% OFF, máximo R$ 50, em R$ 99 em Itens de Limpeza")).toBe("limpeza");
+    expect(scopeFromText("Cupom Mercado Livre oferece R$ 20 em R$ 149 em Pet Shop")).toBe("pet shop");
+    expect(scopeFromText("35% OFF em itens Colgate acima de R$ 199")).toBe("colgate");
+    expect(scopeFromText("CUPOM 25% OFF, Limite de R$ 500 OFF · 25% OFF em R$ 1")).toBeNull();
+    expect(scopeFromText("Economize R$ 40 ao usar o código promocional no carrinho de compras (acima de R$ 199).")).toBeNull();
+    expect(scopeFromText("20% OFF limitado à R$50 em Lojas Oficiais")).toBeNull(); // "selecionados" (SELECTED)
+  });
+  it("código com data expira depois do dia", () => {
+    const now = new Date(2026, 9, 30, 15, 0);
+    expect(expiredByCode("TODOSITE2810", now)).toBe(true);
+    expect(expiredByCode("SITE3010", now)).toBe(false);
+    expect(expiredByCode("MELIMAIS2610", now)).toBe(true);
+    expect(expiredByCode("SITEMELIMAIS15", now)).toBe(false);
+    expect(expiredByCode("MUNDOAUTO45", now)).toBe(false);
+    expect(expiredByCode("NATAL2512", now)).toBe(false);
+  });
+  it("celular não está em eletrônicos", () => {
+    expect(categoryRule("Apple iPhone 17 256GB", "eletrônicos")).toBe(false);
+    expect(categoryRule("Samsung Galaxy S25 Ultra", "tecnologia")).toBe(false);
+    expect(categoryRule("Apple iPhone 17 256GB", "celulares")).toBeNull();
+    expect(categoryRule("Fritadeira Air Fryer Philco 15L", "eletrônicos")).toBeNull();
   });
 });

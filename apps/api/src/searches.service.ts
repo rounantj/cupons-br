@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { embed } from "@cupons/ai";
 import { AffiliateLinkView, CouponView, CreateSearch, SearchMode, SearchView } from "@cupons/contracts";
-import { canonicalKey, credentialsFromEnv, discountLabel, finalPrice, ourLink, productOf, ProductRef, sameProduct } from "@cupons/core";
+import { canonicalKey, credentialsFromEnv, discountLabel, expiredByCode, finalPrice, MIN_CONFIDENCE, ourLink, productOf, ProductRef, sameProduct } from "@cupons/core";
 import { getQueue, one, query, QUEUES, toVector } from "@cupons/db";
 
 /** Produto com busca completa mais nova que isto não é recatalogado (só os cupons são reaquecidos). */
@@ -12,8 +12,6 @@ const COUPON_TTL_MINUTES = Number(process.env.COUPON_TTL_MINUTES ?? 60);
 const CANDIDATE_DISTANCE = Number(process.env.CANDIDATE_DISTANCE ?? 0.3);
 /** Só cupons vistos recentemente: a ideia é oferecer coisas quentes. */
 const HOT_DAYS = Number(process.env.COUPON_HOT_DAYS ?? 14);
-/** Só cupons com evidência de valer para o produto (cupom de campanha "talvez sirva" frustra o usuário no checkout). */
-const MIN_CONFIDENCE = 0.6;
 
 /** "Apple iPhone 17 256GB | Amazon.com.br" -> "Apple iPhone 17 256GB" */
 function cleanTitle(title: string): string {
@@ -158,6 +156,7 @@ export class SearchesService {
     // Sem preço do produto na plataforma do cupom: estima o % efetivo pelo preço da página/outra loja
     const pagePrice: number | null = s.page?.price ?? affiliateLinks.find((l) => l.price)?.price ?? null;
     const coupons: CouponView[] = rows.flatMap((r) => {
+      if (expiredByCode(r.code)) return [];
       const terms = { kind: r.discount_kind, value: r.value, cap: r.cap, min: r.min };
       const listing = cheapest.get(r.platform);
       const base = listing?.price ?? pagePrice;
@@ -166,7 +165,7 @@ export class SearchesService {
         const fp = finalPrice(base, terms);
         if (fp.price === null && listing?.price) return []; // não se aplica ao preço desta plataforma (ex.: mínimo maior)
         if (fp.price !== null) effective = Math.round(((base - fp.price) / base) * 1000) / 10;
-        if (effective !== null && effective < 0.5) return []; // efeito desprezível no produto
+        if (effective !== null && effective < 1) return []; // efeito desprezível no produto (R$ 40 num iPhone)
       }
       return [{
         code: r.code,

@@ -78,7 +78,11 @@ export const FIT_SYSTEM = `Para cada categoria, responda se o PRODUTO pertence a
 Seja literal e estrito; na dúvida, responda false.
 Exemplo para um console de videogame: pertence a "eletrônicos", "games", "consoles", "tecnologia";
 NÃO pertence a "gabinetes", "processadores", "fontes", "notebooks", "casa conectada", "áudio", "celulares",
-nem a um produto específico diferente.`;
+nem a um produto específico diferente.
+Siga a árvore de categorias das lojas brasileiras (Mercado Livre, Amazon): "Celulares e Telefones" é categoria própria,
+então celular/smartphone NÃO pertence a "eletrônicos" (nem a "tecnologia", "informática", "áudio e vídeo");
+"Informática" (notebooks, PCs, periféricos) também não está em "eletrônicos"; eletrodomésticos/eletroportáteis
+(air fryer, liquidificador, geladeira) NÃO são "eletrônicos".`;
 
 export const FIT_SCHEMA = {
   type: "object",

@@ -50,9 +50,22 @@ export function couponForOtherModel(query: string, context: string): string | nu
   return modelConflict(query, context);
 }
 
-/** Dois nomes descrevem o mesmo produto? Mesmos números de modelo/capacidade e nenhuma versão diferente. */
+const tokensOf = (s: string) => (normalizeText(s).match(/[a-z0-9]+/g) ?? []).filter((t) => !STOP.has(t));
+
+/**
+ * Dois nomes descrevem o mesmo produto? Mesmos números de modelo/capacidade ("15L" ≠ "4L"), nenhuma versão
+ * diferente, e não cada um com palavras que o outro não tem (marca: "Philco" x "Mondial").
+ * Um nome mais longo que o outro ("... - Distribuidor Autorizado") continua sendo o mesmo produto.
+ */
 export function sameProduct(a: string, b: string): boolean {
-  return !productMismatch(a, b) && !productMismatch(b, a) && !modelConflict(a, b) && !modelConflict(b, a);
+  if (productMismatch(a, b) || productMismatch(b, a) || modelConflict(a, b) || modelConflict(b, a)) return false;
+  const ta = tokensOf(a), tb = tokensOf(b);
+  const withDigit = (ts: string[]) => new Set(ts.filter((t) => /\d/.test(t)));
+  const da = withDigit(ta), db = withDigit(tb);
+  if (da.size !== db.size || [...da].some((t) => !db.has(t))) return false;
+  const words = (ts: string[]) => new Set(ts.filter((t) => !/\d/.test(t) && t.length > 2));
+  const wa = words(ta), wb = words(tb);
+  return ![...wa].some((w) => !wb.has(w)) || ![...wb].some((w) => !wa.has(w));
 }
 
 /** Busca "ps5 pro" e o trecho fala de "ps5 slim" -> conflito. Busca base aceita Slim/Digital, não Pro/Max/Ultra. */

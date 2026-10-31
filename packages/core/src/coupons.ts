@@ -64,7 +64,50 @@ export function commentSignal(comments: string[], code: string | null): "works" 
   return works ? "works" : fails ? "fails" : null;
 }
 
-export const SELECTED = /selecionad|eleg[íi]ve|participantes|da campanha/i;
+/** Confiança mínima para mostrar um cupom: abaixo disso ele "talvez sirva" e frustra o usuário no checkout. */
+export const MIN_CONFIDENCE = 0.6;
+
+const STORE_WORDS = /^(mercado|amazon|shopee|magalu|magazine|kabum|casas|americanas|compras|r\$)/i;
+
+/**
+ * Escopo escrito no cupom de loja: "em itens Auto", "em Itens de Limpeza", "em Pet Shop", "35% OFF em itens Colgate".
+ * Retorna a categoria/marca (em minúsculas) ou null quando o texto não restringe.
+ */
+export function scopeFromText(text: string): string | null {
+  const m = text.match(/\b(?:em|nos|nas)\s+(?:itens|produtos|categoria)\s+(?:de\s+|da\s+|do\s+)?([A-Za-zÀ-ú][A-Za-zÀ-ú&\s]{1,30}?)(?=\s*(?:[,.|;:!()\-–—]|\.\.|\bacima\b|\ba partir\b|\bcom\b|\bno\b|\bna\b|\d|$))/im)
+    ?? text.match(/\bem\s+((?:[A-ZÀ-Ú][a-zà-ú]+)(?:\s+(?:e\s+)?[A-ZÀ-Ú][a-zà-ú]+)*)/m);
+  const scope = m?.[1]?.trim();
+  if (!scope || STORE_WORDS.test(scope) || SELECTED.test(scope)) return null;
+  return scope.toLowerCase();
+}
+
+/**
+ * Código com data de campanha ("TODOSITE2810", "SITE3010") expira depois desse dia: no teste real,
+ * TODOSITE2810 respondeu "O cupom não está mais disponível" em 30/10.
+ */
+export function expiredByCode(code: string, now = new Date()): boolean {
+  const m = code.match(/(?<!\d)(0[1-9]|[12]\d|3[01])(0[1-9]|1[0-2])(?!\d)/);
+  if (!m) return false;
+  const [day, month] = [Number(m[1]), Number(m[2])];
+  let end = new Date(now.getFullYear(), month - 1, day, 23, 59, 59);
+  if (end.getTime() - now.getTime() > 180 * 86400_000) end = new Date(now.getFullYear() - 1, month - 1, day, 23, 59, 59); // virada do ano
+  return end < now;
+}
+
+const PHONE = /\b(iphone|smartphone|celular|galaxy [asmz]\d|moto [eg]\d|motorola|redmi|xiaomi|poco [xmf]\d)/i;
+const GENERIC_TECH = /eletr[ôo]nic|tecnolog|inform[áa]tica|[áa]udio|v[íi]deo|games?\b|eletrodom|eletroport/i;
+
+/**
+ * Regras fixas de categoria (a IA oscilou: "iPhone 17 está em eletrônicos?" deu true e false no mesmo dia).
+ * No Mercado Livre/Amazon "Celulares e Telefones" é categoria própria: cupom de "Eletrônicos" não aplicou num iPhone.
+ * Retorna null quando a regra não decide (a IA responde).
+ */
+export function categoryRule(productName: string, category: string): boolean | null {
+  if (PHONE.test(productName)) return /celular|smartphone|telefon|iphone|apple/i.test(category) ? null : GENERIC_TECH.test(category) ? false : null;
+  return null;
+}
+
+export const SELECTED = /selecionad|eleg[íi]ve|participantes|da campanha|lojas? oficia/i;
 const GENERIC = new Set(["produtos", "produto", "itens", "item", "selecionados", "selecionadas", "participantes", "campanha",
   "lista", "loja", "site", "todo", "toda", "todos", "todas", "utilizado", "utilize", "valido", "limitado", "acima",
   "compras", "compra", "cupom", "desconto", "carrinho", "pedido", "pedidos", "liberado", "categoria", "categorias",
