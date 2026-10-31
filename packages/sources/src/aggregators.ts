@@ -6,7 +6,7 @@
  * Promobit /buscar é proibido no robots.txt: não usamos.
  */
 import type { Platform } from "@cupons/contracts";
-import { modelConflict, platformOf, productMismatch } from "@cupons/core";
+import { platformOf, titleMatches } from "@cupons/core";
 import { cacheGet, cacheSet } from "@cupons/db";
 import { getText } from "./http";
 import { CreatorContent, SourceResult } from "./types";
@@ -67,7 +67,7 @@ async function pelandoDeals(productName: string): Promise<{ items: CreatorConten
   if (!m) return { items: [], seen: 0 };
   const deals: PelandoDeal[] = astro(JSON.parse(unescape(m[1]))).initialData?.deals?.deals ?? [];
   const matching = deals.filter((d) => d.status === "active" && Date.parse(d.createdAt) > Date.now() - HOT_MS
-    && platformOf(d.store?.name, d.sourceUrl) && !productMismatch(term, d.title) && !modelConflict(term, d.title));
+    && platformOf(d.store?.name, d.sourceUrl) && titleMatches(term, d.title));
 
   const items: CreatorContent[] = [];
   for (const d of matching.slice(0, MAX_DEALS)) {

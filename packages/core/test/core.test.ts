@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   brlAmounts, canonicalKey, codeCategory, couponForOtherModel, credentialsFromEnv, discountLabel, finalPrice, isCode, modelConflict, offCategory,
-  ourLink, parseTerms, platformOf, productMismatch, productOf, sameProduct, scopeFromText, expiredByCode, categoryRule, termsNearCode, verifiedRestriction,
+  ourLink, parseTerms, platformOf, productMismatch, productOf, sameProduct, scopeFromText, expiredByCode, categoryRule, titleMatches, SELECTED, termsNearCode, verifiedRestriction,
 } from "../src";
 
 describe("parseTerms", () => {
@@ -131,5 +131,17 @@ describe("plataformas e links", () => {
     expect(categoryRule("Samsung Galaxy S25 Ultra", "tecnologia")).toBe(false);
     expect(categoryRule("Apple iPhone 17 256GB", "celulares")).toBeNull();
     expect(categoryRule("Fritadeira Air Fryer Philco 15L", "eletrônicos")).toBeNull();
+  });
+  it("título de oferta do mesmo produto", () => {
+    expect(titleMatches("Basike Fone de Ouvido Bluetooth Clip-on", "Fone de Ouvido Bluetooth JBL Tune 520")).toBe(false);
+    expect(titleMatches("iPhone 18 Pro Max 512GB Bordô", "Apple iPhone 18 Pro Max 512GB")).toBe(true);
+    expect(titleMatches("Fritadeira Air Fryer Philco 15L", "Fritadeira Air Fryer Philco 15L 127V/220V")).toBe(true);
+    expect(titleMatches("Fritadeira Air Fryer Philco 15L", "Air Fryer Oven Philco 16L Digital")).toBe(false);
+  });
+  it("cupom de combo/itens qualificados não vale para um produto avulso", () => {
+    expect(SELECTED.test("[Prime] Leve 3 itens da Lista e ganhe 15% OFF na Amazon · Sobre 1000 itens qualificados")).toBe(true);
+    expect(SELECTED.test("Itens perto do Vencimento com 20% OFF · Seleção de itens")).toBe(true);
+    expect(SELECTED.test("Exclusivo Prime: 40% off · Cupom Amazon: OUTLETPRIME")).toBe(true);
+    expect(SELECTED.test("CUPOM 25% OFF, Limite de R$ 500 OFF")).toBe(false);
   });
 });

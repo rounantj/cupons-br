@@ -84,3 +84,38 @@ export function detectProduct(): PageContext | null {
     image: typeof image === "string" && image.startsWith("http") ? image : undefined,
   };
 }
+
+/**
+ * Cupom que a própria loja mostra no anúncio ("Aplicar cupom de 10%", "Cupom de R$ 20 OFF"): vale com certeza
+ * para este produto. Só olha a área do produto (não carrosséis de outros itens).
+ */
+const COUPON_AREAS: Record<string, string[]> = {
+  amazon: ["#promoPriceBlockMessage_feature_div", "#applicable_promotion_list_sec", "#vpcButton", "#couponBadge_feature_div",
+    "#corePriceDisplay_desktop_feature_div", "#apex_desktop", "#buybox"],
+  mercadolivre: [".ui-pdp-container__row--price", ".ui-pdp-promotions-pill", "[class*='coupon']", ".ui-pdp-price", ".ui-pdp-buybox"],
+  shopee: ["[class*='voucher']", "section[aria-label*='cupom' i]"],
+  magazineluiza: ["[data-testid*='coupon']", "[data-testid='price-value']"],
+};
+const COUPON_TEXT = [
+  /aplicar cupom de\s*(\d{1,2}\s?%|R\$\s?[\d.,]+)/i,
+  /economize\s*(\d{1,2}\s?%|R\$\s?[\d.,]+)\s*com (?:o )?cupom/i,
+  /cupom de\s*(\d{1,2}\s?%|R\$\s?[\d.,]+)(?:\s*off)?/i,
+  /(\d{1,2}\s?%|R\$\s?[\d.,]+)\s*off\s*(?:com|no|usando)\s*(?:o )?cupom/i,
+];
+
+export interface PageCoupon { amount: string; text: string; element: Element }
+
+export function pageCoupon(): PageCoupon | null {
+  const store = Object.keys(COUPON_AREAS).find((k) => location.hostname.replace(/\./g, "").includes(k));
+  if (!store) return null;
+  for (const sel of COUPON_AREAS[store]) {
+    for (const el of document.querySelectorAll(sel)) {
+      const t = (el as HTMLElement).innerText?.replace(/\s+/g, " ").trim() ?? "";
+      for (const rx of COUPON_TEXT) {
+        const m = t.match(rx);
+        if (m) return { amount: m[1].replace(/\s/g, ""), text: m[0], element: el };
+      }
+    }
+  }
+  return null;
+}

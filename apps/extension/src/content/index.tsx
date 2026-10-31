@@ -5,7 +5,7 @@
 import { createRoot, Root } from "react-dom/client";
 import type { SearchView } from "@cupons/contracts";
 import type { Reply, Request } from "../messages";
-import { detectProduct, isProductPage } from "./detect";
+import { detectProduct, isProductPage, pageCoupon, PageCoupon } from "./detect";
 import { CSS } from "./styles";
 import { Searching, Toast } from "./Toast";
 import type { ReactNode } from "react";
@@ -44,9 +44,19 @@ function mount(node: ReactNode) {
   root.render(node);
 }
 
-function showResult(view: SearchView) {
+function showResult(view: SearchView, onPage: PageCoupon | null) {
   mount(
-    <Toast view={view} currentUrl={location.href} onClose={() => {
+    <Toast view={view} currentUrl={location.href}
+      pageCoupon={onPage && { amount: onPage.amount, text: onPage.text }}
+      onShowPageCoupon={() => {
+        if (!onPage) return;
+        onPage.element.scrollIntoView({ behavior: "smooth", block: "center" });
+        const el = onPage.element as HTMLElement;
+        const before = el.style.outline;
+        el.style.outline = "3px solid #16a34a";
+        setTimeout(() => { el.style.outline = before; }, 2500);
+      }}
+      onClose={() => {
       sessionStorage.setItem(`cupons-br:closed:${view.product?.id}`, "1");
       unmount();
     }} onHideSite={async () => {
@@ -87,7 +97,9 @@ async function run() {
   unmount();
   if (!reply.ok || reply.view.status !== "done") return;
   if (sessionStorage.getItem(`cupons-br:closed:${reply.view.product?.id}`)) return;
-  if (worthShowing(reply.view)) showResult(reply.view);
+  // a loja carrega o bloco de cupom depois do preço: lê no fim da busca
+  const onPage = pageCoupon();
+  if (onPage || worthShowing(reply.view)) showResult(reply.view, onPage);
 }
 
 // Primeira carga (aguarda o JSON-LD/título da loja) + mudanças de URL sem recarga.

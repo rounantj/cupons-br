@@ -78,3 +78,16 @@ export function modelConflict(query: string, context: string): string | null {
   if (missing.length || extra.length) return `modelo diferente (${extra.join(", ") || "sem " + missing.join(", ")})`;
   return null;
 }
+
+/**
+ * Título de oferta (Pelando) é deste produto? Números e modelo iguais e ao menos 75% das palavras do nome.
+ * "Basike Fone de Ouvido Bluetooth" não casa com "Fone de Ouvido Bluetooth JBL" (só "fone ouvido bluetooth").
+ */
+export function titleMatches(name: string, title: string): boolean {
+  if (productMismatch(name, title) || modelConflict(name, title)) return false;
+  const ctx = new Set(tokensOf(title));
+  if (tokensOf(name).some((t) => /\d/.test(t) && !ctx.has(t))) return false; // "15l" ≠ "16l"
+  const words = [...new Set(tokensOf(name).filter((t) => !/\d/.test(t) && t.length > 2))];
+  if (!words.length) return true;
+  return words.filter((w) => ctx.has(w)).length / words.length >= 0.75;
+}

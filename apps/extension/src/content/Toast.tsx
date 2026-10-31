@@ -30,20 +30,27 @@ function CopyButton({ code }: { code: string }) {
 /** Clique do usuário abre o NOSSO link (nunca redireciona sozinho). */
 const open = (url: string) => window.open(url, "_blank", "noopener");
 
-interface Props { view: SearchView; currentUrl: string; onClose: () => void; onHideSite: () => void }
+/** Cupom que a loja mostra no próprio anúncio (lido da página): sem código, o usuário ativa no anúncio. */
+export interface OnPageCoupon { amount: string; text: string }
 
-export function Toast({ view, currentUrl, onClose, onHideSite }: Props) {
+interface Props {
+  view: SearchView; currentUrl: string; onClose: () => void; onHideSite: () => void;
+  pageCoupon?: OnPageCoupon | null; onShowPageCoupon?: () => void;
+}
+
+export function Toast({ view, currentUrl, onClose, onHideSite, pageCoupon, onShowPageCoupon }: Props) {
   const [minimized, setMinimized] = useState(false);
   const coupons = view.coupons;
   const links: AffiliateLinkView[] = view.affiliateLinks.filter((l) => l.affiliateUrl || l.productUrl).slice(0, 3);
   const [best, ...rest] = coupons;
+  const total = coupons.length + (pageCoupon ? 1 : 0);
   const navigatedAway = view.originUrl && view.originUrl.split("?")[0] !== currentUrl.split("?")[0];
 
   if (minimized) {
     return (
       <button className="pill" onClick={() => setMinimized(false)} aria-label="Abrir cupons encontrados">
         <span className="logo">%</span>
-        {coupons.length ? `${coupons.length} cupom${coupons.length > 1 ? "s" : ""}` : "Ofertas"}
+        {total ? `${total} cupom${total > 1 ? "s" : ""}` : "Ofertas"}
       </button>
     );
   }
@@ -52,12 +59,25 @@ export function Toast({ view, currentUrl, onClose, onHideSite }: Props) {
       <div className="head">
         <span className="logo">%</span>
         <div className="title">
-          <b>{coupons.length ? `${coupons.length} cupom${coupons.length > 1 ? "s" : ""} para este produto` : "Ofertas deste produto"}</b>
+          <b>{total ? `${total} cupom${total > 1 ? "s" : ""} para este produto` : "Ofertas deste produto"}</b>
           <span>{view.product?.name}</span>
         </div>
         <button className="icon" title="Minimizar" aria-label="Minimizar" onClick={() => setMinimized(true)}>–</button>
         <button className="icon" title="Fechar" aria-label="Fechar" onClick={onClose}>×</button>
       </div>
+
+      {pageCoupon && (
+        <div className="best">
+          <div className="row" style={{ marginBottom: 8 }}>
+            <span className="pct">{pageCoupon.amount.includes("%") ? `-${pageCoupon.amount}` : pageCoupon.amount}</span>
+            <span className="meta">cupom da própria loja neste anúncio · ative antes de comprar</span>
+          </div>
+          <div className="row">
+            <span className="code" title={pageCoupon.text}>{pageCoupon.text}</span>
+            <button className="copy" onClick={onShowPageCoupon}>Mostrar</button>
+          </div>
+        </div>
+      )}
 
       {best && (
         <div className="best">

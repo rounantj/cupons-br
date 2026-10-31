@@ -15,7 +15,7 @@
 import { CREATOR_SCHEMA, CREATOR_SYSTEM, CreatorItem, FIT_SCHEMA, FIT_SYSTEM, chatJson } from "@cupons/ai";
 import {
   FOREIGN_URL, SELECTED, brlAmounts, categoryRule, expiredByCode, cleanStore, codeCategory, commentSignal, couponForOtherModel, isCode, linesNear, modelConflict,
-  platformOf, productMismatch, productOf, scopeFromText, termsNearCode, verifiedRestriction,
+  platformOf, productMismatch, productOf, scopeFromText, titleMatches, termsNearCode, verifiedRestriction,
 } from "@cupons/core";
 import { cached, one, query } from "@cupons/db";
 import { CreatorContent, resolveUrl, shortName } from "@cupons/sources";
@@ -124,13 +124,15 @@ const label = (c: CreatorContent) => (c.source === "pelando" ? "Pelando" : "Prom
 async function scope(p: ProductCtx, c: CreatorContent, url: string | null, near: string): Promise<CouponDecision> {
   const ref = url ? productOf(await resolveUrl(url)) : null;
   if (ref) {
-    if (productMismatch(shortName(p.name), `${c.title}\n${c.text}`))
+    if (isDeal(c) ? !titleMatches(shortName(p.name), c.title) : productMismatch(shortName(p.name), `${c.title}\n${c.text}`))
       return { applies: true, confidence: 0.25, reason: "divulgado junto com outro produto — confira no carrinho" };
     return { applies: true, confidence: AGGREGATOR.has(c.source) ? 0.8 : 0.75,
       reason: AGGREGATOR.has(c.source) ? `usado neste produto (oferta no ${label(c)})` : "divulgado junto com este produto" };
   }
   // cupom de loja num agregador: o escopo vem escrito ("Selecionados", "itens de Casa"); sem escopo = geral
-  if (AGGREGATOR.has(c.source)) return { applies: true, confidence: 0.65, reason: `cupom da loja sem restrição (${label(c)})` };
+  // Promobit usa texto-modelo ("15% OFF em suas compras") até para cupom de marca (STANLEY15): sozinho não basta
+  if (c.source === "pelando") return { applies: true, confidence: 0.65, reason: "cupom da loja sem restrição (Pelando)" };
+  if (c.source === "promobit") return { applies: true, confidence: 0.5, reason: "cupom da loja no Promobit, sem escopo confirmado" };
   return SITEWIDE.test(near)
     ? { applies: true, confidence: 0.45, reason: "anunciado como válido no site todo — confira no carrinho" }
     : { applies: true, confidence: 0.3, reason: "cupom de campanha: vale em produtos selecionados — confira no carrinho" };
